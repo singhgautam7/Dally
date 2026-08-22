@@ -1,0 +1,21 @@
+/// Centralised route paths and names. Game screens are parameterised by the
+/// module id so routing stays derived from the registry.
+class Routes {
+  Routes._();
+
+  static const String welcome = '/welcome';
+  static const String home = '/';
+  static const String stats = '/stats';
+  static const String settings = '/settings';
+  static const String about = '/about';
+  static const String theme = '/theme';
+
+  /// Game setup: `/game/:id`.
+  static String gameSetup(String id) => '/game/$id';
+
+  /// Game play: `/game/:id/play`.
+  static String gamePlay(String id) => '/game/$id/play';
+
+  static const String gameSetupPattern = '/game/:id';
+  static const String gamePlayPattern = '/game/:id/play';
+}
