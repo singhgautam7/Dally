@@ -55,3 +55,6 @@ key.properties
 # Design handoff & working guidance — not shipped (see build prompt §10).
 # Holds specs/design/ and specs/performance.md.
 /specs/
+
+# Local dev screenshots
+.dev-shots/

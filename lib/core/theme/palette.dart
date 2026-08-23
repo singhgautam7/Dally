@@ -98,6 +98,32 @@ class Palette {
   /// Last-move highlight.
   Color get lastMoveTint => accent.withValues(alpha: 0.14);
 
+  // ── Chess board squares ───────────────────────────────────────────────────
+  // Near-neutral by design (from `Dally Chess Pieces.dc.html`) so the fixed
+  // cream light pieces never disappear: light themes drop to a warm taupe, dark
+  // themes to a cool charcoal, AMOLED to a near-black checker.
+
+  Color get chessLightSquare => isAmoled
+      ? const Color(0xFF14161B)
+      : isDark
+          ? const Color(0xFF212530)
+          : const Color(0xFFE9E4DA);
+
+  Color get chessDarkSquare => isAmoled
+      ? const Color(0xFF000000)
+      : isDark
+          ? const Color(0xFF171A20)
+          : const Color(0xFFD5CEC0);
+
+  /// Neutral fill laid *under* the line for the "Outline" piece style, so the
+  /// contour carries the shape while the body still contrasts with the square.
+  Color get pieceHollowLight =>
+      isDark ? const Color(0xFF2C313B) : const Color(0xFFC6BFAF);
+  Color get pieceHollowDark => Color.alphaBlend(
+        accent.withValues(alpha: isDark ? 0.18 : 0.22),
+        isDark ? surface : const Color(0xFFE9E4DA),
+      );
+
   // ── 2048 value ramp ──────────────────────────────────────────────────────
 
   /// Eleven tile backgrounds for values 2 … 2048, ramping

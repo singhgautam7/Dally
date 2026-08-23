@@ -2,8 +2,12 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/shell/about/about_screen.dart';
 import '../../features/shell/coming_soon_screen.dart';
 import '../../features/shell/home/home_screen.dart';
+import '../../features/shell/settings/settings_screen.dart';
+import '../../features/shell/stats/stats_screen.dart';
+import '../../features/shell/theme_picker/theme_picker_screen.dart';
 import '../../features/shell/welcome/welcome_screen.dart';
 import '../app_providers.dart';
 import '../game/game_registry.dart';
@@ -34,19 +38,19 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: Routes.stats,
-        builder: (context, state) => const ComingSoonScreen(title: 'Stats'),
+        builder: (context, state) => const StatsScreen(),
       ),
       GoRoute(
         path: Routes.settings,
-        builder: (context, state) => const ComingSoonScreen(title: 'Settings'),
+        builder: (context, state) => const SettingsScreen(),
       ),
       GoRoute(
         path: Routes.about,
-        builder: (context, state) => const ComingSoonScreen(title: 'About'),
+        builder: (context, state) => const AboutScreen(),
       ),
       GoRoute(
         path: Routes.theme,
-        builder: (context, state) => const ComingSoonScreen(title: 'Theme'),
+        builder: (context, state) => const ThemePickerScreen(),
       ),
       GoRoute(
         path: Routes.gameSetupPattern,

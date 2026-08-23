@@ -5,50 +5,170 @@ import 'package:go_router/go_router.dart';
 import '../../../core/app_providers.dart';
 import '../../../core/routing/routes.dart';
 import '../../../core/theme/dally_tokens.dart';
+import '../../../core/theme/palettes.dart';
 import '../../../core/theme/spacing.dart';
+import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/type_scale.dart';
+import '../../../core/widgets/generic_palette_preview.dart';
 import '../../../core/widgets/primary_pill.dart';
 
-/// First-launch welcome. Two steps max; step two (theme pick) lands in Phase 2.
-/// The offline promise is front-and-centre.
-class WelcomeScreen extends ConsumerWidget {
+/// First-launch welcome: step 1 introduces Dally and the offline promise;
+/// step 2 lets the player pick a look. Both end in "Start playing".
+class WelcomeScreen extends ConsumerStatefulWidget {
   const WelcomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<WelcomeScreen> createState() => _WelcomeScreenState();
+}
+
+class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
+  int _step = 0;
+
+  Future<void> _finish() async {
+    await ref.read(welcomeSeenProvider.notifier).markSeen();
+    if (mounted) context.go(Routes.home);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final t = context.tokens;
     return Scaffold(
       backgroundColor: t.bg,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(Insets.s6),
+          padding: const EdgeInsets.fromLTRB(Insets.s4 + 2, Insets.s5, Insets.s4 + 2, Insets.s5),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: _step == 0
+                ? _IntroStep(
+                    key: const ValueKey('intro'),
+                    onNext: () => setState(() => _step = 1),
+                  )
+                : _ThemeStep(
+                    key: const ValueKey('theme'),
+                    onStart: _finish,
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _IntroStep extends StatelessWidget {
+  const _IntroStep({super.key, required this.onNext});
+  final VoidCallback onNext;
+
+  static const _games = ['Minesweeper', 'Sudoku', '2048', 'Chess', 'Snake', '+3 more'];
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Spacer(),
-              Text('Dally', style: DallyType.displayLg.copyWith(color: t.textPrimary)),
-              const Gap(Insets.s3),
-              Text(
-                'A quiet little pile of games.',
-                style: DallyType.body.copyWith(color: t.textMuted),
-              ),
-              const Gap(Insets.s5),
-              Text(
-                '100% offline · no ads · no tracking · no accounts',
-                style: DallyType.monoSm.copyWith(color: t.textFaint),
-              ),
-              const Spacer(),
-              PrimaryPill(
-                label: 'Start playing',
-                onPressed: () async {
-                  await ref.read(welcomeSeenProvider.notifier).markSeen();
-                  if (context.mounted) context.go(Routes.home);
-                },
+              Text('Dally',
+                  style: DallyType.displayLg.copyWith(
+                      fontSize: 60, height: 1, letterSpacing: -2.4, color: t.textPrimary)),
+              const Gap(Insets.s4 + 2),
+              SizedBox(
+                width: 280,
+                child: Text(
+                  'Eight quiet classics in one small app. No timers you didn\'t ask for.',
+                  style: DallyType.body.copyWith(fontSize: 19, height: 1.45, color: t.textMuted),
+                ),
               ),
             ],
           ),
         ),
-      ),
+        Wrap(
+          spacing: Insets.s2,
+          runSpacing: Insets.s2,
+          children: [
+            for (final g in _games)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: Insets.s2),
+                decoration: BoxDecoration(borderRadius: Radii.pillBR, border: Border.all(color: t.border)),
+                child: Text(g, style: DallyType.body.copyWith(fontSize: 12, color: t.textMuted)),
+              ),
+          ],
+        ),
+        const Gap(Insets.s6),
+        Row(
+          children: [
+            Icon(Icons.lock_outline_rounded, size: 15, color: t.accent),
+            const Gap.h(Insets.s2 + 2),
+            Expanded(
+              child: Text('100% offline · no ads · no tracking · no accounts',
+                  style: DallyType.bodyStrong.copyWith(fontSize: 14, color: t.textPrimary)),
+            ),
+          ],
+        ),
+        const Gap(Insets.s2),
+        Text('Nothing to sign up for, nothing to switch off.',
+            style: DallyType.body.copyWith(fontSize: 12, color: t.textMuted, height: 1.6)),
+        const Gap(Insets.s5),
+        PrimaryPill(label: 'Start playing', onPressed: onNext),
+        const Gap(Insets.s3),
+        Center(
+          child: GestureDetector(
+            onTap: onNext,
+            child: Text('Pick a theme first',
+                style: DallyType.body.copyWith(fontSize: 13, color: t.textMuted)),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ThemeStep extends ConsumerWidget {
+  const _ThemeStep({super.key, required this.onStart});
+  final VoidCallback onStart;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = context.tokens;
+    final selectedId = ref.watch(settingsControllerProvider.select((s) => s.paletteId));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Pick a look',
+            style: DallyType.displayLg.copyWith(fontSize: 28, letterSpacing: -0.56, color: t.textPrimary)),
+        const Gap(Insets.s1 + 2),
+        Text('Change it any time, even mid-game.',
+            style: DallyType.body.copyWith(fontSize: 14, color: t.textMuted)),
+        const Gap(Insets.s5),
+        Expanded(
+          child: GridView.builder(
+            physics: const BouncingScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: Insets.s3 - 2,
+              crossAxisSpacing: Insets.s3 - 2,
+              mainAxisExtent: 150,
+            ),
+            itemCount: DallyPalettes.standard.length,
+            itemBuilder: (context, i) {
+              final p = DallyPalettes.standard[i];
+              return GestureDetector(
+                onTap: () => ref.read(settingsControllerProvider.notifier).selectPalette(p.id),
+                child: GenericPalettePreview(palette: p, selected: p.id == selectedId),
+              );
+            },
+          ),
+        ),
+        const Gap(Insets.s4),
+        Text('Two more true-black themes live in Settings for OLED screens.',
+            style: DallyType.body.copyWith(fontSize: 12, color: t.textFaint, height: 1.6)),
+        const Gap(Insets.s3),
+        PrimaryPill(label: 'Start playing', onPressed: onStart),
+      ],
     );
   }
 }

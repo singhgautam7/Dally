@@ -13,6 +13,7 @@ enum Vibe {
   leisure('Leisure'),
   brainTeaser('Brain teaser'),
   reflex('Reflex'),
+  party('Party'),
   mentalMath('Mental math');
 
   const Vibe(this.label);

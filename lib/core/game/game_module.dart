@@ -1,6 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../storage/stats_repository.dart';
+import '../widgets/how_to_play.dart';
 import 'game_category.dart';
 
 /// How a stat should be read and formatted on the Stats screen.
@@ -86,8 +88,9 @@ abstract class GameModule {
 
   bool get supportsSaveResume;
 
-  /// Optional How-to-play sheet content.
-  Widget? buildHowToPlay(BuildContext context);
+  /// Optional How-to-play sheet content (goal, board legend, controls). Shown
+  /// from both the setup link and the pause row via [showHowTo].
+  HowToContent? buildHowToPlay(BuildContext context);
 
   /// Style sets for the pause-sheet picker; empty when the game has none.
   List<StyleOption> get styleOptions => const [];
@@ -95,4 +98,13 @@ abstract class GameModule {
   /// Default style id when the game has [styleOptions].
   String? get defaultStyleId =>
       styleOptions.isEmpty ? null : styleOptions.first.id;
+
+  /// The best-score line for the home tile, formatted by the game from its own
+  /// namespaced stats (e.g. `"Best 11 264"`, `"01:16 · Beginner"`). Returns
+  /// null when there's nothing to show yet, and the tile omits the line.
+  String? homeBestLabel(StatsRepository stats) => null;
+
+  /// The tile subtitle — the game's vibes joined, e.g. `"Brain teaser · Leisure"`.
+  /// Relies on [vibes] being an insertion-ordered set literal.
+  String get vibeLabel => vibes.map((v) => v.label).join(' · ');
 }

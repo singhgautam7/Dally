@@ -73,8 +73,26 @@ class DallyTokens extends ThemeExtension<DallyTokens> {
   Color get moveHint => palette.moveHint;
   Color get selectedTint => palette.selectedTint;
   Color get lastMoveTint => palette.lastMoveTint;
+  Color get chessLightSquare => palette.chessLightSquare;
+  Color get chessDarkSquare => palette.chessDarkSquare;
+  Color get pieceHollowLight => palette.pieceHollowLight;
+  Color get pieceHollowDark => palette.pieceHollowDark;
 
   bool get isDark => palette.isDark;
+
+  /// True when an elevated [surface] is indistinguishable from [bg] — i.e. on
+  /// the AMOLED palettes, where both are pure black. Surface-filled containers
+  /// (score cards, chips, sheets) must then draw a hairline to stay legible.
+  bool get surfaceNeedsOutline => surface.toARGB32() == bg.toARGB32();
+
+  /// A hairline for surface containers: the border colour on AMOLED where the
+  /// fill alone is invisible, otherwise null (keeps the flat look elsewhere).
+  Border? get surfaceBorder =>
+      surfaceNeedsOutline ? Border.all(color: border) : null;
+
+  /// Just the outline colour (transparent when not needed), for callers that
+  /// already build their own [Border].
+  Color get surfaceOutline => surfaceNeedsOutline ? border : const Color(0x00000000);
 
   @override
   DallyTokens copyWith({Palette? palette}) =>

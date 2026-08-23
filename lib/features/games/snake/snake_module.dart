@@ -1,0 +1,92 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/game/game_category.dart';
+import '../../../core/game/game_module.dart';
+import '../../../core/storage/stats_repository.dart';
+import '../../../core/theme/dally_tokens.dart';
+import '../../../core/util/format.dart';
+import '../../../core/widgets/game_glyph.dart';
+import '../../../core/widgets/how_to_play.dart';
+import 'snake_config.dart';
+import 'ui/play_snake_screen.dart';
+import 'ui/setup_snake_screen.dart';
+
+/// Snake — swipe-to-steer arcade. Single-player.
+class SnakeModule extends GameModule {
+  @override
+  String get id => 'snake';
+
+  @override
+  String get title => 'Snake';
+
+  @override
+  String get tagline => 'Steer, grow, don\'t bite yourself.';
+
+  @override
+  Widget buildGlyph(BuildContext context) => GameGlyph(asset: id);
+
+  @override
+  Set<PlayerMode> get players => {PlayerMode.single};
+
+  @override
+  Set<Vibe> get vibes => {Vibe.reflex, Vibe.leisure};
+
+  @override
+  bool get supportsSaveResume => false;
+
+  @override
+  List<StatSpec> get statSpecs => const [
+        StatSpec(key: 'highScore', label: 'Best length', format: StatFormat.number, higherIsBetter: true),
+      ];
+
+  @override
+  List<StyleOption> get styleOptions => const [
+        StyleOption(id: 'classic', label: 'Classic'),
+        StyleOption(id: 'ribbon', label: 'Ribbon'),
+        StyleOption(id: 'pixel', label: 'Pixel'),
+      ];
+
+  @override
+  String? homeBestLabel(StatsRepository stats) {
+    final s = stats.bestOf('$id.highScore');
+    return s == null ? null : 'Best ${formatGrouped(s)}';
+  }
+
+  @override
+  Widget buildSetupScreen(BuildContext context, WidgetRef ref) =>
+      SetupSnakeScreen(moduleId: id);
+
+  @override
+  Widget buildPlayScreen(BuildContext context, WidgetRef ref, GameConfig config) =>
+      PlaySnakeScreen(moduleId: id, config: config as SnakeConfig);
+
+  @override
+  HowToContent? buildHowToPlay(BuildContext context) {
+    final t = context.tokens;
+    return HowToContent(
+      goal: "Eat, grow, and don't run into yourself. Length is the score.",
+      readingLabel: 'Reading the arena',
+      reading: [
+        HowToLegend(howToCell(t: t, color: t.accent, radius: 6), 'You. The head leads, the tail follows.'),
+        HowToLegend(
+          howToCell(t: t, hairline: true, child: Container(
+            width: 12, height: 12,
+            decoration: BoxDecoration(color: t.danger, shape: BoxShape.circle),
+          )),
+          'Food. One segment longer, one point.',
+        ),
+        HowToLegend(howToCell(t: t, color: t.surfaceAlt, hairline: true),
+            'The edge is a wall — unless you turned wrap on.'),
+      ],
+      controls: [
+        HowToStep(Icon(Icons.swipe_rounded, size: 20, color: t.textMuted), 'Swipe',
+            'Anywhere on the arena, in the direction you want'),
+        HowToStep(Icon(Icons.gamepad_outlined, size: 20, color: t.textMuted), 'Ghosted D-pad',
+            'Floats in the corner · turn it off in Settings'),
+        HowToStep(Icon(Icons.pause_rounded, size: 20, color: t.textMuted), 'Pause',
+            'Ghosted in the opposite corner, or the overflow button'),
+      ],
+    );
+  }
+}

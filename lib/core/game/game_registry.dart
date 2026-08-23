@@ -1,15 +1,29 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/games/chess/chess_module.dart';
+import '../../features/games/fifteen_puzzle/fifteen_puzzle_module.dart';
+import '../../features/games/game_2048/game_2048_module.dart';
+import '../../features/games/memory/memory_module.dart';
+import '../../features/games/minesweeper/minesweeper_module.dart';
+import '../../features/games/snake/snake_module.dart';
+import '../../features/games/sudoku/sudoku_module.dart';
+import '../../features/games/tic_tac_toe/tic_tac_toe_module.dart';
 import 'game_module.dart';
 
 /// The single place games are wired into the app. Home, filtering, stats and
 /// routing all derive from this list — nothing else references a game module
 /// directly. Adding a game means appending its module here (and nowhere else).
 ///
-/// Populated as each game module lands in `features/games/…`.
-const List<GameModule> kGameModules = <GameModule>[
-  // game_2048, minesweeper, sudoku, snake, memory, fifteen_puzzle,
-  // tic_tac_toe, chess … registered here as they are implemented.
+/// Order is the home-grid order from the design.
+final List<GameModule> kGameModules = <GameModule>[
+  Game2048Module(),
+  MinesweeperModule(),
+  SudokuModule(),
+  SnakeModule(),
+  MemoryModule(),
+  FifteenPuzzleModule(),
+  TicTacToeModule(),
+  ChessModule(),
 ];
 
 /// Exposes the ordered module list to the widget tree.

@@ -75,6 +75,9 @@ class GenericPalettePreview extends StatelessWidget {
                         const SizedBox(height: 9),
                         Text(
                           'Aa',
+                          maxLines: 1,
+                          softWrap: false,
+                          overflow: TextOverflow.clip,
                           style: DallyType.body.copyWith(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -85,6 +88,9 @@ class GenericPalettePreview extends StatelessWidget {
                         const SizedBox(height: 4),
                         Text(
                           '01:16',
+                          maxLines: 1,
+                          softWrap: false,
+                          overflow: TextOverflow.clip,
                           style: DallyType.monoSm.copyWith(fontSize: 9, color: p.textMuted),
                         ),
                       ],
