@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/app_version.dart';
 import '../../../core/game/game_registry.dart';
 
 import '../../../core/theme/dally_tokens.dart';
@@ -13,8 +14,6 @@ import '../../../core/widgets/shell_header.dart';
 /// are in-app sheets. Nothing here makes a network call.
 class AboutScreen extends ConsumerWidget {
   const AboutScreen({super.key});
-
-  static const String version = '1.0.0';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -40,7 +39,8 @@ class AboutScreen extends ConsumerWidget {
                         Text('Dally',
                             style: DallyType.displayLg.copyWith(color: t.textPrimary)),
                         const Gap.h(Insets.s3),
-                        Text(version,
+                        // Generated from pubspec.yaml — see tool/sync_version.dart.
+                        Text(appVersion,
                             style: DallyType.monoSm.copyWith(color: t.textFaint)),
                       ],
                     ),
