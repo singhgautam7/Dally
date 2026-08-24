@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/game/game_category.dart';
 import '../../../core/game/game_module.dart';
+import '../../../core/storage/game_session.dart';
+import '../../../core/storage/stat_aggregate.dart';
 import '../../../core/theme/dally_tokens.dart';
 import '../../../core/theme/type_scale.dart';
 import '../../../core/widgets/how_to_play.dart';
@@ -34,25 +36,51 @@ class SudokuModule extends GameModule {
   Set<Vibe> get vibes => {Vibe.brainTeaser};
 
   @override
+  GameCategory get category => GameCategory.brain;
+
+  @override
+  GameLength get typicalLength => GameLength.long;
+
+  @override
+  List<String> get tags => const ['numbers', 'grid', 'logic', 'puzzle', 'nine'];
+
+  @override
   bool get supportsSaveResume => true;
 
   @override
-  List<StatSpec> get statSpecs => const [
-        StatSpec(
-          key: 'bestTime',
-          label: 'Best time',
-          format: StatFormat.duration,
-          higherIsBetter: false,
-          variantLabels: {
-            'beginner': 'Beginner',
-            'easy': 'Easy',
-            'medium': 'Medium',
-            'hard': 'Hard',
-            'master': 'Master',
-          },
-        ),
-        StatSpec(key: 'solved', label: 'Solved', format: StatFormat.number, higherIsBetter: true),
-      ];
+  List<StatBlock> statBlocks(GameAggregate agg) {
+    final solved = agg.outcome(SessionOutcome.solved);
+    final abandoned = agg.outcome(SessionOutcome.abandoned) + agg.outcome(SessionOutcome.failed);
+    final blocks = <StatBlock>[
+      if (solved + abandoned > 0)
+        StatBlock.bars(title: 'Solved vs left', bars: [
+          StatBar('Solved', solved, accent: true),
+          StatBar('Left', abandoned),
+        ]),
+    ];
+    for (final label in const ['Beginner', 'Easy', 'Medium', 'Hard', 'Master']) {
+      final c = agg.config(label);
+      if (c.isEmpty) {
+        blocks.add(StatBlock.waiting(title: label, waitingFor: 'Not played yet.'));
+      } else {
+        blocks.add(StatBlock.cells(title: label, cells: [
+          StatCell.metric('Best time', c.metric('duration'), StatFormat.duration,
+              higherIsBetter: false, accent: true),
+          StatCell.average('Average', c.metric('duration'), StatFormat.duration),
+          StatCell('Solved', '${c.outcome(SessionOutcome.solved)}/${c.sessions}',
+              earned: c.sessions > 0),
+        ]));
+      }
+    }
+    return blocks;
+  }
+
+  @override
+  String? statSummary(GameAggregate agg) {
+    final n = agg.outcome(SessionOutcome.solved);
+    return n == 0 ? null : '$n solved';
+  }
+
 
   @override
   String? homeBestLabel(StatsRepository stats) {

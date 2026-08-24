@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/storage/game_session.dart';
+import '../../../../core/game/game_registry.dart';
+import '../../../../core/game/session_recorder.dart';
 import '../../../../core/routing/routes.dart';
 import '../../../../core/game/how_to_launcher.dart';
 import '../../../../core/app_providers.dart';
@@ -15,6 +18,7 @@ import '../../../../core/theme/theme_controller.dart';
 import '../../../../core/theme/type_scale.dart';
 import '../../../../core/widgets/game_scaffold.dart';
 import '../../../../core/widgets/pause_sheet.dart';
+import '../../../../core/widgets/style_picker_sheet.dart';
 import '../../../../core/widgets/primary_pill.dart';
 import '../logic/snake_game.dart';
 import '../snake_config.dart';
@@ -37,6 +41,7 @@ class _PlaySnakeScreenState extends ConsumerState<PlaySnakeScreen> with WidgetsB
   bool _dead = false;
   bool _outOfBounds = false;
   double _best = 0;
+  DateTime _startedAt = DateTime.now();
   Offset? _panStart;
   Dir? _pressed;
 
@@ -101,6 +106,15 @@ class _PlaySnakeScreenState extends ConsumerState<PlaySnakeScreen> with WidgetsB
         higherIsBetter: true);
     ref.read(statsRepositoryProvider).recordBest(
         '${widget.moduleId}.highScore', _game.length.toDouble(), higherIsBetter: true);
+    recordSession(
+      ref,
+      gameId: widget.moduleId,
+      startedAt: _startedAt,
+      durationSeconds: DateTime.now().difference(_startedAt).inSeconds,
+      outcome: SessionOutcome.completed,
+      configLabel: widget.config.label,
+      score: _game.length,
+    );
     if (_game.length > _best) _best = _game.length.toDouble();
   }
 
@@ -111,6 +125,7 @@ class _PlaySnakeScreenState extends ConsumerState<PlaySnakeScreen> with WidgetsB
       _started = false;
       _dead = false;
     });
+    _startedAt = DateTime.now();
     ref.read(statsRepositoryProvider).increment('${widget.moduleId}.played');
   }
 
@@ -126,7 +141,12 @@ class _PlaySnakeScreenState extends ConsumerState<PlaySnakeScreen> with WidgetsB
       onHowToPlay: () => openHowTo(context, ref,
           moduleId: widget.moduleId, subtitle: 'Snake · ${widget.config.label}'),
       extraRows: [
-        SnakeStyleRow(gameId: widget.moduleId),
+        ?stylePickerRow(
+          context,
+          ref,
+          module: ref.read(gameByIdProvider(widget.moduleId))!,
+          previewBuilder: snakeStylePreview,
+        ),
         const OnScreenControlsRow(),
       ],
     );

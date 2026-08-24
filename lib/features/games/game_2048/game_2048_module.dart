@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/game/game_category.dart';
 import '../../../core/game/game_module.dart';
+import '../../../core/storage/stat_aggregate.dart';
 import '../../../core/theme/dally_tokens.dart';
 import '../../../core/theme/type_scale.dart';
 import '../../../core/widgets/how_to_play.dart';
@@ -34,13 +35,41 @@ class Game2048Module extends GameModule {
   Set<Vibe> get vibes => {Vibe.brainTeaser, Vibe.leisure};
 
   @override
+  GameCategory get category => GameCategory.brain;
+
+  @override
+  GameLength get typicalLength => GameLength.medium;
+
+  @override
+  List<String> get tags => const ['tiles', 'merge', 'numbers', 'puzzle', 'slide'];
+
+  @override
   bool get supportsSaveResume => true;
 
   @override
-  List<StatSpec> get statSpecs => const [
-        StatSpec(key: 'bestScore', label: 'Best score', format: StatFormat.number, higherIsBetter: true),
-        StatSpec(key: 'bestTile', label: 'Best tile', format: StatFormat.tile, higherIsBetter: true),
-      ];
+  List<StatBlock> statBlocks(GameAggregate agg) {
+    final score = agg.metric('score');
+    final tile = agg.metric('bestTile');
+    return [
+      StatBlock.hero(
+        title: 'Best score',
+        cell: StatCell.metric('Best score', score, StatFormat.number,
+            higherIsBetter: true, accent: true),
+      ),
+      StatBlock.cells(cells: [
+        StatCell.count('Games', agg.sessions),
+        StatCell.metric('Best tile', tile, StatFormat.tile, higherIsBetter: true),
+        StatCell.average('Average', score, StatFormat.number),
+        StatCell('Play time', StatFormat.duration.render(agg.seconds), earned: agg.seconds > 0),
+      ]),
+    ];
+  }
+
+  @override
+  String? statSummary(GameAggregate agg) {
+    final best = agg.metric('score').best(higherIsBetter: true);
+    return best == null ? null : 'Best ${formatGrouped(best)}';
+  }
 
   @override
   String? homeBestLabel(StatsRepository stats) {

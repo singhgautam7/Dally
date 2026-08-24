@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/game/game_category.dart';
 import '../../../core/game/game_module.dart';
+import '../../../core/storage/game_session.dart';
+import '../../../core/storage/stat_aggregate.dart';
 import '../../../core/theme/dally_tokens.dart';
 import '../../../core/widgets/how_to_play.dart';
 import '../../../core/widgets/game_glyph.dart';
@@ -31,13 +33,42 @@ class TicTacToeModule extends GameModule {
   Set<Vibe> get vibes => {Vibe.leisure};
 
   @override
-  bool get supportsSaveResume => false;
+  GameCategory get category => GameCategory.classic;
 
   @override
-  List<StatSpec> get statSpecs => const [
-        StatSpec(key: 'record', label: 'W / L / D', format: StatFormat.record, higherIsBetter: true),
-      ];
+  GameLength get typicalLength => GameLength.short;
 
+  @override
+  List<String> get tags => const ['noughts', 'crosses', 'grid', 'three in a row', 'two player'];
+
+  @override
+  bool get supportsSaveResume => false;
+
+
+
+  @override
+  List<StatBlock> statBlocks(GameAggregate agg) {
+    final w = agg.outcome(SessionOutcome.won);
+    final l = agg.outcome(SessionOutcome.lost);
+    final d = agg.outcome(SessionOutcome.drawn);
+    return [
+      if (w + l + d > 0)
+        StatBlock.bars(title: 'Results', bars: [
+          StatBar('Player 1', w, accent: true),
+          StatBar('Player 2', l),
+          StatBar('Drawn', d),
+        ]),
+      StatBlock.cells(cells: [
+        StatCell.count('Games', agg.sessions),
+        StatCell.count('Drawn', d),
+        StatCell.average('Average game', agg.metric('duration'), StatFormat.duration),
+      ]),
+    ];
+  }
+
+  @override
+  String? statSummary(GameAggregate agg) =>
+      agg.sessions == 0 ? null : '\${agg.outcome(SessionOutcome.won)} / \${agg.outcome(SessionOutcome.lost)} / \${agg.outcome(SessionOutcome.drawn)}';
   @override
   Widget buildSetupScreen(BuildContext context, WidgetRef ref) =>
       SetupTicTacToeScreen(moduleId: id);

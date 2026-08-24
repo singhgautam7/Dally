@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/app_providers.dart';
+import '../../../core/game/game_registry.dart';
 import '../../../core/routing/routes.dart';
 import '../../../core/theme/dally_tokens.dart';
 import '../../../core/theme/palettes.dart';
@@ -55,15 +56,18 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
   }
 }
 
-class _IntroStep extends StatelessWidget {
+class _IntroStep extends ConsumerWidget {
   const _IntroStep({super.key, required this.onNext});
   final VoidCallback onNext;
 
-  static const _games = ['Minesweeper', 'Sudoku', '2048', 'Chess', 'Snake', '+3 more'];
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final t = context.tokens;
+    final registry = ref.watch(gameRegistryProvider);
+    // The headline no longer counts games; the catalogue line and the chip row
+    // both derive from the registry, so adding a game needs no copy edit.
+    final names = registry.take(5).map((m) => m.title).toList();
+    final rest = registry.length - names.length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -75,11 +79,14 @@ class _IntroStep extends StatelessWidget {
               Text('Dally',
                   style: DallyType.displayLg.copyWith(
                       fontSize: 60, height: 1, letterSpacing: -2.4, color: t.textPrimary)),
-              const Gap(Insets.s4 + 2),
+              const Gap(Insets.s4),
+              Text(ref.watch(catalogueLineProvider),
+                  style: DallyType.monoSm.copyWith(fontSize: 13, color: t.textFaint)),
+              const Gap(Insets.s4),
               SizedBox(
                 width: 280,
                 child: Text(
-                  'Eight quiet classics in one small app. No timers you didn\'t ask for.',
+                  'Quiet classics in one small app. No timers you didn\'t ask for.',
                   style: DallyType.body.copyWith(fontSize: 19, height: 1.45, color: t.textMuted),
                 ),
               ),
@@ -90,7 +97,7 @@ class _IntroStep extends StatelessWidget {
           spacing: Insets.s2,
           runSpacing: Insets.s2,
           children: [
-            for (final g in _games)
+            for (final g in [...names, if (rest > 0) '+$rest more'])
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 13, vertical: Insets.s2),
                 decoration: BoxDecoration(borderRadius: Radii.pillBR, border: Border.all(color: t.border)),

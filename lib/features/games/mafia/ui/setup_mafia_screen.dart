@@ -9,6 +9,7 @@ import '../../../../core/services/haptics.dart';
 import '../../../../core/theme/dally_tokens.dart';
 import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/type_scale.dart';
+import '../../../../core/widgets/player_name_row.dart';
 import '../../../../core/widgets/setup_scaffold.dart';
 import '../logic/mafia_rules.dart';
 import '../logic/mafia_word_pair.dart';
@@ -92,7 +93,7 @@ class _SetupMafiaScreenState extends ConsumerState<SetupMafiaScreen> {
           child: Column(
             children: [
               for (var i = 0; i < _names.length; i++)
-                _PlayerRow(
+                PlayerNameRow(
                   index: i,
                   controller: _names[i],
                   canRemove: _names.length > MafiaRules.minPlayers,
@@ -172,67 +173,6 @@ class _SetupMafiaScreenState extends ConsumerState<SetupMafiaScreen> {
         MafiaRosterStore.save(ref.read(saveRepositoryProvider), config);
         context.push(Routes.gamePlay(widget.moduleId), extra: config);
       },
-    );
-  }
-}
-
-class _PlayerRow extends StatelessWidget {
-  const _PlayerRow({
-    required this.index,
-    required this.controller,
-    required this.canRemove,
-    required this.onRemove,
-    required this.onChanged,
-  });
-
-  final int index;
-  final TextEditingController controller;
-  final bool canRemove;
-  final VoidCallback onRemove;
-  final VoidCallback onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.tokens;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: Insets.s2),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 22,
-            child: Text('${index + 1}',
-                style: DallyType.monoSm.copyWith(fontSize: 12, color: t.textFaint)),
-          ),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              onChanged: (_) => onChanged(),
-              textCapitalization: TextCapitalization.words,
-              maxLength: 16,
-              style: DallyType.body.copyWith(fontSize: 16, color: t.textPrimary),
-              decoration: InputDecoration(
-                isDense: true,
-                counterText: '',
-                hintText: 'Player ${index + 1}',
-                hintStyle: DallyType.body.copyWith(fontSize: 16, color: t.textFaint),
-                filled: true,
-                fillColor: t.surfaceAlt,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(11),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-          ),
-          if (canRemove)
-            IconButton(
-              onPressed: onRemove,
-              icon: Icon(Icons.close_rounded, size: 18, color: t.textFaint),
-              splashRadius: 18,
-            ),
-        ],
-      ),
     );
   }
 }

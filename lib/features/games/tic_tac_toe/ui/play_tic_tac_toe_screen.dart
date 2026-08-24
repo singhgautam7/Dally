@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/storage/game_session.dart';
+import '../../../../core/game/session_recorder.dart';
 import '../../../../core/routing/routes.dart';
 import '../../../../core/game/how_to_launcher.dart';
 import '../../../../core/app_providers.dart';
@@ -61,6 +63,8 @@ class _PlayTicTacToeScreenState extends ConsumerState<PlayTicTacToeScreen>
     setState(() {});
   }
 
+  DateTime _startedAt = DateTime.now();
+
   void _tap(int index) {
     if (_game.result != null) return;
     if (!_game.play(index)) return;
@@ -88,6 +92,17 @@ class _PlayTicTacToeScreenState extends ConsumerState<PlayTicTacToeScreen>
       stats.increment('${widget.moduleId}.draws');
       Haptics.light(ref);
     }
+    recordSession(
+      ref,
+      gameId: widget.moduleId,
+      startedAt: _startedAt,
+      durationSeconds: DateTime.now().difference(_startedAt).inSeconds,
+      outcome: res.winner == Ttt.x
+          ? SessionOutcome.won
+          : (res.winner == Ttt.o ? SessionOutcome.lost : SessionOutcome.drawn),
+      configLabel: widget.config.label,
+    );
+    _startedAt = DateTime.now();
     setState(() {});
     if (res.line.isNotEmpty) _lineCtrl.forward(from: 0);
   }

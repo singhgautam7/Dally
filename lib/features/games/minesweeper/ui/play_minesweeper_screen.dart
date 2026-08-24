@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/storage/game_session.dart';
+import '../../../../core/game/game_registry.dart';
+import '../../../../core/game/session_recorder.dart';
 import '../../../../core/routing/routes.dart';
 import '../../../../core/app_providers.dart';
 import '../../../../core/game/how_to_launcher.dart';
@@ -17,6 +20,7 @@ import '../../../../core/util/game_clock.dart';
 import '../../../../core/widgets/board_chip.dart';
 import '../../../../core/widgets/game_scaffold.dart';
 import '../../../../core/widgets/pause_sheet.dart';
+import '../../../../core/widgets/style_picker_sheet.dart';
 import '../../../../core/widgets/primary_pill.dart';
 import '../../../../core/widgets/round_action_button.dart';
 import '../logic/minesweeper_board.dart';
@@ -42,6 +46,7 @@ class _PlayMinesweeperScreenState extends ConsumerState<PlayMinesweeperScreen>
   bool _won = false;
   int _explodedIndex = -1;
   int _clockBase = 0;
+  DateTime _startedAt = DateTime.now();
 
   Timer? _pressTimer;
   bool _pressConsumed = false;
@@ -104,6 +109,7 @@ class _PlayMinesweeperScreenState extends ConsumerState<PlayMinesweeperScreen>
       _explodedIndex = i;
     });
     Haptics.heavy(ref);
+    _record(SessionOutcome.failed);
     MinesweeperSave.clear(ref.read(saveRepositoryProvider));
   }
 
@@ -114,7 +120,23 @@ class _PlayMinesweeperScreenState extends ConsumerState<PlayMinesweeperScreen>
     ref.read(statsRepositoryProvider).recordBest(
         '${widget.moduleId}.bestTime.${_c.statKey}', _displaySeconds.toDouble(),
         higherIsBetter: false);
+    _record(SessionOutcome.solved);
     MinesweeperSave.clear(ref.read(saveRepositoryProvider));
+  }
+
+  /// One session write per finished board; the aggregates the Stats screens
+  /// read are rolled up from it.
+  void _record(SessionOutcome outcome) {
+    recordSession(
+      ref,
+      gameId: widget.moduleId,
+      startedAt: _startedAt,
+      durationSeconds: _displaySeconds,
+      outcome: outcome,
+      configLabel: _c.difficulty.label,
+      score: _displaySeconds,
+      extras: {'mines': _c.mines},
+    );
   }
 
   void _persist() {
@@ -134,6 +156,7 @@ class _PlayMinesweeperScreenState extends ConsumerState<PlayMinesweeperScreen>
       _explodedIndex = -1;
     });
     _clockBase = 0;
+    _startedAt = DateTime.now();
     resetClock();
     ref.read(statsRepositoryProvider).increment('${widget.moduleId}.played');
   }
@@ -150,7 +173,12 @@ class _PlayMinesweeperScreenState extends ConsumerState<PlayMinesweeperScreen>
       onHowToPlay: () =>
           openHowTo(context, ref, moduleId: widget.moduleId, subtitle: 'Minesweeper · ${_c.label}'),
       extraRows: [
-        MineStyleRow(gameId: widget.moduleId),
+        ?stylePickerRow(
+          context,
+          ref,
+          module: ref.read(gameByIdProvider(widget.moduleId))!,
+          previewBuilder: mineStylePreview,
+        ),
         const LongPressRow(),
       ],
     );

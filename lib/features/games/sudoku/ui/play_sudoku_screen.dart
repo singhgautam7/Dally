@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/storage/game_session.dart';
+import '../../../../core/game/session_recorder.dart';
 import '../../../../core/routing/routes.dart';
 import '../../../../core/game/how_to_launcher.dart';
 import '../../../../core/app_providers.dart';
@@ -42,6 +44,7 @@ class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
   bool _pencil = false;
   bool _loading = true;
   bool _solved = false;
+  DateTime _startedAt = DateTime.now();
 
   @override
   void initState() {
@@ -165,6 +168,15 @@ class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
     stats.recordBest('${widget.moduleId}.bestTime.${widget.config.difficulty.name}',
         _displaySeconds.toDouble(), higherIsBetter: false);
     stats.increment('${widget.moduleId}.solved');
+    recordSession(
+      ref,
+      gameId: widget.moduleId,
+      startedAt: _startedAt,
+      durationSeconds: _displaySeconds,
+      outcome: SessionOutcome.solved,
+      configLabel: widget.config.difficulty.label,
+      score: _displaySeconds,
+    );
     SudokuSave.clear(ref.read(saveRepositoryProvider));
   }
 
@@ -212,6 +224,7 @@ class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
       _pencils = List.generate(81, (_) => <int>[]);
       _undo.clear();
       _solved = false;
+      _startedAt = DateTime.now();
       _selected = -1;
     });
     _clockBase = 0;

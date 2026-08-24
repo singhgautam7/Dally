@@ -6,6 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/storage/game_session.dart';
+import '../../../../core/game/game_registry.dart';
+import '../../../../core/game/session_recorder.dart';
 import '../../../../core/routing/routes.dart';
 import '../../../../core/game/how_to_launcher.dart';
 import '../../../../core/app_providers.dart';
@@ -17,6 +20,7 @@ import '../../../../core/theme/type_scale.dart';
 import '../../../../core/util/format.dart';
 import '../../../../core/widgets/game_scaffold.dart';
 import '../../../../core/widgets/pause_sheet.dart';
+import '../../../../core/widgets/style_picker_sheet.dart';
 import '../../../../core/widgets/primary_pill.dart';
 import '../chess_config.dart';
 import 'chess_pieces.dart';
@@ -45,6 +49,7 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen> with WidgetsB
   Timer? _clock;
   bool _clockStarted = false;
   String? _outcomeText;
+  DateTime _startedAt = DateTime.now();
 
   @override
   void initState() {
@@ -220,7 +225,30 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen> with WidgetsB
     _stopClock();
     setState(() => _outcomeText = text);
     Haptics.heavy(ref);
+    _recordSession(text);
     ChessSave.clear(ref.read(saveRepositoryProvider));
+  }
+
+  /// Results are recorded from player 1's point of view, so the Stats bar reads
+  /// P1 / P2 / drawn rather than white / black.
+  void _recordSession(String text) {
+    final whiteWon = text.startsWith('White');
+    final blackWon = text.startsWith('Black');
+    final p1Won = (_p1White && whiteWon) || (!_p1White && blackWon);
+    recordSession(
+      ref,
+      gameId: widget.moduleId,
+      startedAt: _startedAt,
+      durationSeconds: DateTime.now().difference(_startedAt).inSeconds,
+      outcome: (!whiteWon && !blackWon)
+          ? SessionOutcome.drawn
+          : (p1Won ? SessionOutcome.won : SessionOutcome.lost),
+      configLabel: widget.config.time.label,
+      extras: {
+        'moves': _history.length,
+        if (_pos.isCheckmate) 'checkmate': 1,
+      },
+    );
   }
 
   String _san(Position pos, NormalMove move) {
@@ -288,6 +316,7 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen> with WidgetsB
       _whiteMs = widget.config.time.seconds * 1000;
       _blackMs = widget.config.time.seconds * 1000;
     });
+    _startedAt = DateTime.now();
     ref.read(statsRepositoryProvider).increment('${widget.moduleId}.gamesPlayed');
   }
 
@@ -302,7 +331,14 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen> with WidgetsB
       timeLabel: '',
       onHowToPlay: () => openHowTo(context, ref,
           moduleId: widget.moduleId, subtitle: 'Chess · ${widget.config.label}'),
-      extraRows: [PieceStyleRow(gameId: widget.moduleId)],
+      extraRows: [
+        ?stylePickerRow(
+          context,
+          ref,
+          module: ref.read(gameByIdProvider(widget.moduleId))!,
+          previewBuilder: chessStylePreview,
+        ),
+      ],
     );
     if (!mounted) return;
     switch (result) {

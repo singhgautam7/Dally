@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/game/game_category.dart';
 import '../../../core/game/game_module.dart';
+import '../../../core/storage/game_session.dart';
+import '../../../core/storage/stat_aggregate.dart';
 import '../../../core/storage/stats_repository.dart';
 import '../../../core/theme/dally_tokens.dart';
 import '../../../core/theme/type_scale.dart';
@@ -34,26 +36,56 @@ class MinesweeperModule extends GameModule {
   Set<Vibe> get vibes => {Vibe.brainTeaser};
 
   @override
+  GameCategory get category => GameCategory.classic;
+
+  @override
+  GameLength get typicalLength => GameLength.medium;
+
+  @override
+  List<String> get tags => const ['mines', 'flags', 'grid', 'logic', 'sweeper'];
+
+  @override
   bool get supportsSaveResume => true;
 
   @override
-  List<StatSpec> get statSpecs => const [
-        StatSpec(
-          key: 'bestTime',
-          label: 'Best time',
-          format: StatFormat.duration,
-          higherIsBetter: false,
-          variantLabels: {
-            'beginner': 'Beginner',
-            'intermediate': 'Intermediate',
-            'expert': 'Expert',
-          },
-        ),
-      ];
+  List<StatBlock> statBlocks(GameAggregate agg) {
+    // One card per preset, built from the per-config rollup. A preset that has
+    // never been played stays a hairline card rather than showing a zero.
+    final blocks = <StatBlock>[
+      StatBlock.cells(cells: [
+        StatCell.count('Games', agg.sessions),
+        StatCell.count('Cleared', agg.outcome(SessionOutcome.solved)),
+        StatCell('Play time', StatFormat.duration.render(agg.seconds), earned: agg.seconds > 0),
+      ]),
+    ];
+    for (final label in const ['Beginner', 'Intermediate', 'Expert']) {
+      final c = agg.config(label);
+      if (c.isEmpty) {
+        blocks.add(StatBlock.waiting(title: label, waitingFor: 'Clear a $label board to set a time.'));
+      } else {
+        blocks.add(StatBlock.cells(title: label, cells: [
+          StatCell.metric('Best time', c.metric('duration'), StatFormat.duration,
+              higherIsBetter: false, accent: true),
+          StatCell.count('Cleared', c.outcome(SessionOutcome.solved)),
+          StatCell.count('Played', c.sessions),
+        ]));
+      }
+    }
+    return blocks;
+  }
+
+  @override
+  String? statSummary(GameAggregate agg) {
+    final best = agg.metric('duration').best(higherIsBetter: false);
+    return best == null ? null : 'Best ${StatFormat.duration.render(best)}';
+  }
+
+  @override
+  String get styleNoun => 'Flag & mine';
 
   @override
   List<StyleOption> get styleOptions => const [
-        StyleOption(id: 'classic', label: 'Classic'),
+        StyleOption(id: 'classic', label: 'Classic', recommended: true),
         StyleOption(id: 'pennant', label: 'Pennant + dot'),
         StyleOption(id: 'pin', label: 'Pin + diamond'),
       ];

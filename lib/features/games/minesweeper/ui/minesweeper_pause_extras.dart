@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/services/haptics.dart';
 import '../../../../core/theme/dally_tokens.dart';
 import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/theme_controller.dart';
@@ -11,95 +10,22 @@ import 'minesweeper_painter.dart';
 
 const List<int> _longPressSteps = [200, 300, 400, 500, 600];
 
-/// Flag & mine style picker for the pause sheet (Classic / Pennant+dot /
-/// Pin+diamond).
-class MineStyleRow extends ConsumerWidget {
-  const MineStyleRow({super.key, required this.gameId});
-  final String gameId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final t = context.tokens;
-    final current = ref.watch(settingsControllerProvider.select((s) => s.styleChoices[gameId])) ?? 'classic';
-    const styles = [('classic', 'Classic'), ('pennant', 'Pennant'), ('pin', 'Pin')];
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: Insets.s3),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Flag & mine style', style: DallyType.body.copyWith(fontSize: 15, color: t.textPrimary)),
-          const Gap(Insets.s3),
-          Row(
-            children: [
-              for (final (id, label) in styles) ...[
-                if (id != 'classic') const Gap.h(Insets.s2 + 2),
-                Expanded(
-                  child: _StyleCard(
-                    label: label,
-                    style: mineStyleFromId(id),
-                    selected: current == id,
-                    tokens: t,
-                    onTap: () {
-                      Haptics.selection(ref);
-                      ref.read(settingsControllerProvider.notifier).setStyleChoice(gameId, id);
-                    },
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ],
+/// The preview handed to the shared [showStylePicker] — the existing flag and
+/// mine artwork, unchanged. The picker shell is now
+/// `core/widgets/style_picker_sheet.dart`, shared with every other game.
+Widget mineStylePreview(BuildContext context, String styleId) {
+  final t = context.tokens;
+  return SizedBox(
+    width: 56,
+    height: 28,
+    child: CustomPaint(
+      painter: _GlyphPreview(
+        style: mineStyleFromId(styleId),
+        flag: t.danger,
+        mine: t.textPrimary,
       ),
-    );
-  }
-}
-
-class _StyleCard extends StatelessWidget {
-  const _StyleCard({
-    required this.label,
-    required this.style,
-    required this.selected,
-    required this.tokens,
-    required this.onTap,
-  });
-
-  final String label;
-  final MineStyle style;
-  final bool selected;
-  final DallyTokens tokens;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = tokens;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-        decoration: BoxDecoration(
-          color: t.surfaceAlt,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: selected ? t.accent : t.border, width: selected ? 2 : 1),
-        ),
-        child: Column(
-          children: [
-            SizedBox(
-              height: 28,
-              width: 56,
-              child: CustomPaint(painter: _GlyphPreview(style: style, flag: t.accent, mine: t.danger)),
-            ),
-            const Gap(Insets.s2 + 2),
-            Text(label,
-                style: DallyType.body.copyWith(
-                  fontSize: 11,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                  color: selected ? t.textPrimary : t.textMuted,
-                )),
-          ],
-        ),
-      ),
-    );
-  }
+    ),
+  );
 }
 
 class _GlyphPreview extends CustomPainter {

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/game/game_registry.dart';
 
 import '../../../core/theme/dally_tokens.dart';
 import '../../../core/theme/spacing.dart';
@@ -8,13 +11,13 @@ import '../../../core/widgets/shell_header.dart';
 /// About — the offline promise in full, then Rate / Share / Privacy / Credits.
 /// Rate and Share are OS handoffs (Play Store, share sheet); Privacy and Credits
 /// are in-app sheets. Nothing here makes a network call.
-class AboutScreen extends StatelessWidget {
+class AboutScreen extends ConsumerWidget {
   const AboutScreen({super.key});
 
   static const String version = '1.0.0';
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final t = context.tokens;
     return Scaffold(
       backgroundColor: t.bg,
@@ -41,6 +44,9 @@ class AboutScreen extends StatelessWidget {
                             style: DallyType.monoSm.copyWith(color: t.textFaint)),
                       ],
                     ),
+                    const Gap(Insets.s2),
+                    Text(ref.watch(catalogueLineProvider),
+                        style: DallyType.monoSm.copyWith(fontSize: 12, color: t.textFaint)),
                     const Gap(Insets.s5),
                     _OfflineCard(tokens: t),
                     const Gap(Insets.s6),

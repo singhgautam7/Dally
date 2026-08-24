@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/game/game_category.dart';
 import '../../../core/game/game_module.dart';
+import '../../../core/storage/game_session.dart';
+import '../../../core/storage/stat_aggregate.dart';
 import '../../../core/theme/dally_tokens.dart';
 import '../../../core/widgets/game_glyph.dart';
 import '../../../core/widgets/how_to_play.dart';
@@ -33,21 +35,62 @@ class ChessModule extends GameModule {
   Set<Vibe> get vibes => {Vibe.brainTeaser};
 
   @override
-  bool get supportsSaveResume => true;
+  GameCategory get category => GameCategory.board;
 
   @override
-  List<StatSpec> get statSpecs => const [
-        StatSpec(key: 'gamesPlayed', label: 'Games played', format: StatFormat.number, higherIsBetter: true),
-      ];
+  GameLength get typicalLength => GameLength.long;
+
+  @override
+  List<String> get tags => const ['board', 'strategy', 'two player', 'checkmate', 'pieces'];
+
+  @override
+  String get styleNoun => 'Piece';
+
+  @override
+  bool get supportsSaveResume => true;
+
 
   @override
   List<StyleOption> get styleOptions => const [
-        StyleOption(id: 'classic', label: 'Classic'),
+        StyleOption(id: 'classic', label: 'Classic', recommended: true),
         StyleOption(id: 'outline', label: 'Outline'),
         StyleOption(id: 'minimal', label: 'Minimal'),
         StyleOption(id: 'letters', label: 'Letters'),
       ];
 
+
+  @override
+  List<StatBlock> statBlocks(GameAggregate agg) {
+    final w = agg.outcome(SessionOutcome.won);
+    final l = agg.outcome(SessionOutcome.lost);
+    final d = agg.outcome(SessionOutcome.drawn);
+    return [
+      if (w + l + d > 0)
+        StatBlock.bars(title: 'Results', bars: [
+          StatBar('Player 1', w, accent: true),
+          StatBar('Player 2', l),
+          StatBar('Drawn', d),
+        ]),
+      StatBlock.cells(cells: [
+        StatCell.count('Games', agg.sessions),
+        StatCell('Play time', StatFormat.duration.render(agg.seconds), earned: agg.seconds > 0),
+        StatCell.average('Average game', agg.metric('duration'), StatFormat.duration),
+        StatCell.metric('Fewest moves', agg.metric('moves'), StatFormat.number,
+            higherIsBetter: false),
+      ]),
+      StatBlock.cells(title: 'How games ended', cells: [
+        StatCell.count('Checkmate', agg.metric('checkmate').sum.round()),
+        StatCell.count('Resigned', agg.metric('resigned').sum.round()),
+        StatCell.count('Drawn', d),
+      ]),
+    ];
+  }
+
+  @override
+  String? statSummary(GameAggregate agg) {
+    if (agg.sessions == 0) return null;
+    return '\${agg.outcome(SessionOutcome.won)} / \${agg.outcome(SessionOutcome.lost)} / \${agg.outcome(SessionOutcome.drawn)}';
+  }
   @override
   Widget buildSetupScreen(BuildContext context, WidgetRef ref) =>
       SetupChessScreen(moduleId: id);

@@ -1,52 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/app_providers.dart';
 import '../../../core/game/game_module.dart';
 import '../../../core/game/game_registry.dart';
-import '../../../core/storage/stats_repository.dart';
+import '../../../core/routing/routes.dart';
+import '../../../core/storage/game_session.dart';
+import '../../../core/storage/history_repository.dart';
+import '../../../core/storage/stat_aggregate.dart';
 import '../../../core/theme/dally_tokens.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/type_scale.dart';
 import '../../../core/util/format.dart';
+import '../../../core/widgets/dally_empty_state.dart';
+import '../../../core/widgets/game_glyph.dart';
+import '../../../core/widgets/primary_pill.dart';
 import '../../../core/widgets/shell_header.dart';
+import 'stats_widgets.dart';
 
-/// One stat card's data.
-class _Card {
-  const _Card(this.label, this.value, {this.hasValue = true});
-  final String label;
-  final String value;
-  final bool hasValue;
-}
-
-/// A game's stat section.
-class _Section {
-  const _Section(this.title, this.played, this.cards);
-  final String title;
-  final int played;
-  final List<_Card> cards;
-}
-
-/// Stats — per-game bests, one quiet scrollable list, mono numbers.
+/// Stats level 1 — the overview. Everything here reads the rolled-up
+/// aggregates, never the session log, so the screen renders in constant time
+/// no matter how much has been played.
 class StatsScreen extends ConsumerWidget {
   const StatsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = context.tokens;
-    final stats = ref.watch(statsRepositoryProvider);
+    final history = ref.watch(historyRepositoryProvider);
     final registry = ref.watch(gameRegistryProvider);
+    final aggregates = history.allAggregates();
+    final totalSessions = history.totalSessions;
 
-    final sections = <_Section>[];
-    var totalPlayed = 0;
-    for (final m in registry) {
-      final played = stats.countOf('${m.id}.played');
-      totalPlayed += played;
-      final cards = _cardsFor(m, stats);
-      if (cards.any((c) => c.hasValue) || played > 0) {
-        sections.add(_Section(m.title, played, cards.take(3).toList()));
-      }
-    }
+    final played = <(GameModule, GameAggregate)>[
+      for (final m in registry)
+        if ((aggregates[m.id]?.sessions ?? 0) > 0) (m, aggregates[m.id]!),
+    ]..sort((a, b) => b.$2.sessions.compareTo(a.$2.sessions));
 
     return Scaffold(
       backgroundColor: t.bg,
@@ -59,19 +49,42 @@ class StatsScreen extends ConsumerWidget {
               const ShellHeader(title: 'Stats'),
               const Gap(Insets.s4),
               Expanded(
-                child: sections.isEmpty
-                    ? _Empty(tokens: t)
+                child: totalSessions == 0
+                    ? DallyEmptyState(
+                        icon: Icons.bar_chart_rounded,
+                        title: 'No stats yet',
+                        message: 'Play a game and your bests, streaks and history show up here.',
+                        actionLabel: 'Pick a game',
+                        onAction: () => context.pop(),
+                      )
                     : ListView(
                         physics: const BouncingScrollPhysics(),
                         children: [
-                          if (totalPlayed > 0) ...[
-                            _Summary(totalPlayed: totalPlayed, tokens: t),
-                            const Gap(Insets.s5),
-                          ],
-                          for (final s in sections) ...[
-                            _SectionView(section: s, tokens: t),
-                            const Gap(Insets.s5),
-                          ],
+                          _HeroCard(history: history),
+                          const Gap(Insets.s5),
+                          _ThisWeek(history: history),
+                          const Gap(Insets.s5),
+                          PrimaryPill.secondary(
+                            label: 'View activity history',
+                            onPressed: () => context.push(Routes.statsActivity),
+                          ),
+                          const Gap(Insets.s6),
+                          Text('BY GAME',
+                              style: DallyType.label.copyWith(
+                                  fontSize: 10, letterSpacing: 1.4, color: t.textFaint)),
+                          const Gap(Insets.s2),
+                          for (final (module, agg) in played.take(6))
+                            _ByGameRow(module: module, agg: agg),
+                          if (played.length > 6)
+                            Padding(
+                              padding: const EdgeInsets.only(top: Insets.s3),
+                              child: Text(
+                                '${played.length - 6} more game${played.length - 6 == 1 ? '' : 's'}',
+                                style: DallyType.body
+                                    .copyWith(fontSize: 13, color: t.textFaint),
+                              ),
+                            ),
+                          const Gap(Insets.s6),
                         ],
                       ),
               ),
@@ -81,157 +94,120 @@ class StatsScreen extends ConsumerWidget {
       ),
     );
   }
-
-  List<_Card> _cardsFor(GameModule m, StatsRepository stats) {
-    final cards = <_Card>[];
-    for (final spec in m.statSpecs) {
-      if (spec.variantLabels.isNotEmpty) {
-        spec.variantLabels.forEach((key, label) {
-          final v = stats.bestOf('${m.id}.${spec.key}.$key');
-          cards.add(_Card(label, _fmt(spec.format, v), hasValue: v != null));
-        });
-      } else if (spec.format == StatFormat.record) {
-        final w = stats.countOf('${m.id}.wins');
-        final l = stats.countOf('${m.id}.losses');
-        final d = stats.countOf('${m.id}.draws');
-        final any = w + l + d > 0;
-        cards.add(_Card(spec.label, any ? '$w / $l / $d' : '—', hasValue: any));
-      } else {
-        final v = stats.bestOf('${m.id}.${spec.key}');
-        cards.add(_Card(spec.label, _fmt(spec.format, v), hasValue: v != null));
-      }
-    }
-    return cards;
-  }
-
-  String _fmt(StatFormat format, double? v) {
-    if (v == null) return '—';
-    switch (format) {
-      case StatFormat.duration:
-        return formatClock(v.round());
-      case StatFormat.number:
-      case StatFormat.tile:
-        return formatGrouped(v);
-      case StatFormat.record:
-        return '—';
-    }
-  }
 }
 
-class _Summary extends StatelessWidget {
-  const _Summary({required this.totalPlayed, required this.tokens});
-  final int totalPlayed;
-  final DallyTokens tokens;
+class _HeroCard extends StatelessWidget {
+  const _HeroCard({required this.history});
+  final HistoryRepository history;
 
   @override
   Widget build(BuildContext context) {
-    final t = tokens;
-    Widget stat(String value, String label) => Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(value, style: DallyType.monoLg.copyWith(fontSize: 26, color: t.textPrimary)),
-            const SizedBox(height: 3),
-            Text(label, style: DallyType.body.copyWith(fontSize: 11, color: t.textFaint)),
-          ],
-        );
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        stat(formatGrouped(totalPlayed), 'games played'),
-      ],
+    final t = context.tokens;
+    final current = history.currentStreak();
+    final longest = history.longestStreak();
+    return Container(
+      padding: const EdgeInsets.all(Insets.s4 + 2),
+      decoration: BoxDecoration(
+        color: t.surface,
+        borderRadius: Radii.containerBR,
+        border: t.surfaceBorder,
+      ),
+      child: Row(
+        children: [
+          Expanded(child: HeroNumber(value: formatGrouped(history.totalSessions), label: 'games played')),
+          Expanded(child: HeroNumber(value: formatDurationShort(history.totalSeconds), label: 'play time')),
+          Expanded(child: HeroNumber(value: current > 0 ? '$current' : '—', label: 'day streak')),
+          Expanded(child: HeroNumber(value: longest > 0 ? '$longest' : '—', label: 'longest')),
+        ],
+      ),
     );
   }
 }
 
-class _SectionView extends StatelessWidget {
-  const _SectionView({required this.section, required this.tokens});
-  final _Section section;
-  final DallyTokens tokens;
+class _ThisWeek extends StatelessWidget {
+  const _ThisWeek({required this.history});
+  final HistoryRepository history;
 
   @override
   Widget build(BuildContext context) {
-    final t = tokens;
+    final t = context.tokens;
+    final days = history.activityByDay();
+    final today = GameSession.startOfDay(DateTime.now());
+    final week = <(String, int)>[];
+    var total = 0;
+    for (var i = 6; i >= 0; i--) {
+      final d = GameSession.dayBefore(today, i);
+      final n = days[GameSession.dayKeyOf(d)] ?? 0;
+      total += n;
+      week.add((_weekdayLetter(d.weekday), n));
+    }
+
+    if (total == 0) {
+      // A hairline card that states what it's waiting for, rather than seven
+      // empty bars that read as a broken chart.
+      return Container(
+        padding: const EdgeInsets.all(Insets.s4),
+        decoration: BoxDecoration(borderRadius: Radii.containerBR, border: Border.all(color: t.border)),
+        child: Text('Nothing played this week — your last seven days show up here.',
+            style: DallyType.body.copyWith(fontSize: 13, color: t.textFaint)),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Text(section.title,
+            Text('This week',
                 style: DallyType.bodyStrong.copyWith(fontSize: 15, color: t.textPrimary)),
             const Spacer(),
-            if (section.played > 0)
-              Text('${section.played} games',
-                  style: DallyType.monoSm.copyWith(fontSize: 11, color: t.textFaint)),
+            Text('$total game${total == 1 ? '' : 's'}',
+                style: DallyType.monoSm.copyWith(fontSize: 11, color: t.textFaint)),
           ],
         ),
-        const Gap(Insets.s2 + 2),
-        Row(
-          children: [
-            for (var i = 0; i < section.cards.length; i++) ...[
-              if (i > 0) const Gap.h(Insets.s2 + 2),
-              Expanded(child: _StatCard(card: section.cards[i], tokens: t)),
-            ],
-          ],
-        ),
+        const Gap(Insets.s3),
+        WeekBars(week: week),
       ],
     );
   }
+
+  static String _weekdayLetter(int weekday) =>
+      const ['M', 'T', 'W', 'T', 'F', 'S', 'S'][weekday - 1];
 }
 
-class _StatCard extends StatelessWidget {
-  const _StatCard({required this.card, required this.tokens});
-  final _Card card;
-  final DallyTokens tokens;
+class _ByGameRow extends StatelessWidget {
+  const _ByGameRow({required this.module, required this.agg});
+  final GameModule module;
+  final GameAggregate agg;
 
   @override
   Widget build(BuildContext context) {
-    final t = tokens;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: Insets.s3, vertical: 10),
-      decoration: BoxDecoration(
-        color: t.surface,
-        borderRadius: const BorderRadius.all(Radius.circular(10)),
-        border: Border.all(color: t.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(card.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: DallyType.body.copyWith(fontSize: 10, color: t.textFaint)),
-          const SizedBox(height: 4),
-          Text(card.value,
-              style: DallyType.monoChip.copyWith(
-                fontSize: 15,
-                color: card.hasValue ? t.textPrimary : t.textFaint,
-              )),
-        ],
-      ),
-    );
-  }
-}
-
-class _Empty extends StatelessWidget {
-  const _Empty({required this.tokens});
-  final DallyTokens tokens;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = tokens;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.bar_chart_rounded, color: t.textFaint, size: 36),
-          const Gap(Insets.s3),
-          Text('No stats yet', style: DallyType.bodyStrong.copyWith(color: t.textMuted)),
-          const Gap(Insets.s1),
-          Text('Play a game and your bests show up here.',
-              textAlign: TextAlign.center,
-              style: DallyType.body.copyWith(fontSize: 13, color: t.textFaint)),
-        ],
+    final t = context.tokens;
+    final summary = module.statSummary(agg) ??
+        '${agg.sessions} game${agg.sessions == 1 ? '' : 's'}';
+    return InkWell(
+      onTap: () => context.push(Routes.statsGame(module.id)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: Insets.s3),
+        child: Row(
+          children: [
+            SizedBox(width: 28, child: GameGlyph(asset: module.id, size: 22)),
+            const Gap.h(Insets.s3),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(module.title,
+                      style: DallyType.bodyStrong.copyWith(fontSize: 15, color: t.textPrimary)),
+                  const SizedBox(height: 2),
+                  Text(summary,
+                      style: DallyType.monoSm.copyWith(fontSize: 11, color: t.textFaint)),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, size: 18, color: t.textFaint),
+          ],
+        ),
       ),
     );
   }

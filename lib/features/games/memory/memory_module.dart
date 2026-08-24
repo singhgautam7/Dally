@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/game/game_category.dart';
 import '../../../core/game/game_module.dart';
+import '../../../core/storage/stat_aggregate.dart';
 import '../../../core/theme/dally_tokens.dart';
 import '../../../core/widgets/how_to_play.dart';
 import '../../../core/storage/stats_repository.dart';
@@ -32,13 +33,17 @@ class MemoryModule extends GameModule {
   Set<Vibe> get vibes => {Vibe.leisure, Vibe.brainTeaser};
 
   @override
-  bool get supportsSaveResume => false;
+  GameCategory get category => GameCategory.classic;
 
   @override
-  List<StatSpec> get statSpecs => const [
-        StatSpec(key: 'bestMoves', label: 'Fewest moves', format: StatFormat.number, higherIsBetter: false),
-        StatSpec(key: 'bestTime', label: 'Best time', format: StatFormat.duration, higherIsBetter: false),
-      ];
+  GameLength get typicalLength => GameLength.short;
+
+  @override
+  List<String> get tags => const ['pairs', 'match', 'cards', 'concentration', 'recall'];
+
+  @override
+  bool get supportsSaveResume => false;
+
 
   @override
   String? homeBestLabel(StatsRepository stats) {
@@ -46,6 +51,24 @@ class MemoryModule extends GameModule {
     return m == null ? null : '${m.round()} moves';
   }
 
+
+  @override
+  List<StatBlock> statBlocks(GameAggregate agg) => [
+        StatBlock.cells(cells: [
+          StatCell.count('Games', agg.sessions),
+          StatCell.metric('Fewest moves', agg.metric('moves'), StatFormat.number,
+              higherIsBetter: false, accent: true),
+          StatCell.metric('Best time', agg.metric('duration'), StatFormat.duration,
+              higherIsBetter: false),
+          StatCell.average('Average moves', agg.metric('moves'), StatFormat.number),
+        ]),
+      ];
+
+  @override
+  String? statSummary(GameAggregate agg) {
+    final m = agg.metric('moves').best(higherIsBetter: false);
+    return m == null ? null : '\${m.round()} moves';
+  }
   @override
   Widget buildSetupScreen(BuildContext context, WidgetRef ref) =>
       SetupMemoryScreen(moduleId: id);

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/storage/game_session.dart';
+import '../../../../core/game/session_recorder.dart';
 import '../../../../core/routing/routes.dart';
 import '../../../../core/game/how_to_launcher.dart';
 import '../../../../core/app_providers.dart';
@@ -35,6 +37,7 @@ class _PlayMemoryScreenState extends ConsumerState<PlayMemoryScreen>
     with WidgetsBindingObserver, GameClock {
   late MemoryGame _game;
   bool _done = false;
+  DateTime _startedAt = DateTime.now();
 
   String get _sizeKey => '${widget.config.cols}x${widget.config.rows}';
 
@@ -84,6 +87,16 @@ class _PlayMemoryScreenState extends ConsumerState<PlayMemoryScreen>
     stats.recordBest('${widget.moduleId}.bestMoves', _game.moves.toDouble(), higherIsBetter: false);
     stats.recordBest('${widget.moduleId}.bestTime.$_sizeKey', elapsedSeconds.toDouble(), higherIsBetter: false);
     stats.recordBest('${widget.moduleId}.bestTime', elapsedSeconds.toDouble(), higherIsBetter: false);
+    recordSession(
+      ref,
+      gameId: widget.moduleId,
+      startedAt: _startedAt,
+      durationSeconds: elapsedSeconds,
+      outcome: SessionOutcome.solved,
+      configLabel: widget.config.label,
+      score: _game.moves,
+      extras: {'moves': _game.moves},
+    );
   }
 
   void _restart() {
@@ -91,6 +104,7 @@ class _PlayMemoryScreenState extends ConsumerState<PlayMemoryScreen>
       _game.reset();
       _done = false;
     });
+    _startedAt = DateTime.now();
     resetClock();
     ref.read(statsRepositoryProvider).increment('${widget.moduleId}.played');
   }

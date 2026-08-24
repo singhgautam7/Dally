@@ -9,96 +9,22 @@ import '../../../../core/theme/theme_controller.dart';
 import '../../../../core/theme/type_scale.dart';
 import 'snake_painter.dart';
 
-/// Inline "Snake & food style" picker (Classic / Ribbon / Pixel) for the pause
-/// sheet. Persists the choice under the game id.
-class SnakeStyleRow extends ConsumerWidget {
-  const SnakeStyleRow({super.key, required this.gameId});
-  final String gameId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final t = context.tokens;
-    final current = ref.watch(settingsControllerProvider.select((s) => s.styleChoices[gameId])) ?? 'classic';
-    const styles = [('classic', 'Classic'), ('ribbon', 'Ribbon'), ('pixel', 'Pixel')];
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: Insets.s3),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Snake & food style',
-              style: DallyType.body.copyWith(fontSize: 15, color: t.textPrimary)),
-          const Gap(Insets.s3),
-          Row(
-            children: [
-              for (final (id, label) in styles) ...[
-                if (id != 'classic') const Gap.h(Insets.s2 + 2),
-                Expanded(
-                  child: _StyleCard(
-                    label: label,
-                    style: snakeStyleFromId(id),
-                    selected: current == id,
-                    tokens: t,
-                    onTap: () {
-                      Haptics.selection(ref);
-                      ref.read(settingsControllerProvider.notifier).setStyleChoice(gameId, id);
-                    },
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ],
+/// The preview handed to the shared [showStylePicker] — the existing snake and
+/// food artwork, unchanged. The picker shell is now
+/// `core/widgets/style_picker_sheet.dart`, shared with every other game.
+Widget snakeStylePreview(BuildContext context, String styleId) {
+  final t = context.tokens;
+  return SizedBox(
+    width: 62,
+    height: 26,
+    child: CustomPaint(
+      painter: _StylePreviewPainter(
+        style: snakeStyleFromId(styleId),
+        snake: t.accent,
+        food: t.danger,
       ),
-    );
-  }
-}
-
-class _StyleCard extends StatelessWidget {
-  const _StyleCard({
-    required this.label,
-    required this.style,
-    required this.selected,
-    required this.tokens,
-    required this.onTap,
-  });
-
-  final String label;
-  final SnakeStyle style;
-  final bool selected;
-  final DallyTokens tokens;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = tokens;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-        decoration: BoxDecoration(
-          color: t.surfaceAlt,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: selected ? t.accent : t.border, width: selected ? 2 : 1),
-        ),
-        child: Column(
-          children: [
-            SizedBox(
-              height: 24,
-              width: 60,
-              child: CustomPaint(painter: _StylePreviewPainter(style: style, snake: t.accent, food: t.danger)),
-            ),
-            const Gap(Insets.s2 + 2),
-            Text(label,
-                style: DallyType.body.copyWith(
-                  fontSize: 11,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                  color: selected ? t.textPrimary : t.textMuted,
-                )),
-          ],
-        ),
-      ),
-    );
-  }
+    ),
+  );
 }
 
 class _StylePreviewPainter extends CustomPainter {

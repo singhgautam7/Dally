@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/storage/game_session.dart';
+import '../../../../core/game/session_recorder.dart';
 import '../../../../core/routing/routes.dart';
 import '../../../../core/game/how_to_launcher.dart';
 import '../../../../core/app_providers.dart';
@@ -34,6 +36,7 @@ class _PlayFifteenScreenState extends ConsumerState<PlayFifteenScreen>
     with WidgetsBindingObserver, GameClock {
   late FifteenBoard _board;
   bool _solved = false;
+  DateTime _startedAt = DateTime.now();
 
   int get _size => widget.config.size;
 
@@ -78,12 +81,23 @@ class _PlayFifteenScreenState extends ConsumerState<PlayFifteenScreen>
     stats.recordBest('${widget.moduleId}.bestMoves', _board.moves.toDouble(), higherIsBetter: false);
     stats.recordBest('${widget.moduleId}.bestTime.$_size', elapsedSeconds.toDouble(), higherIsBetter: false);
     stats.recordBest('${widget.moduleId}.bestTime', elapsedSeconds.toDouble(), higherIsBetter: false);
+    recordSession(
+      ref,
+      gameId: widget.moduleId,
+      startedAt: _startedAt,
+      durationSeconds: elapsedSeconds,
+      outcome: SessionOutcome.solved,
+      configLabel: '$_size×$_size',
+      score: _board.moves,
+      extras: {'moves': _board.moves},
+    );
   }
 
   void _restart() {
     setState(() {
       _board = FifteenBoard(size: _size)..shuffle();
       _solved = false;
+      _startedAt = DateTime.now();
     });
     resetClock();
     ref.read(statsRepositoryProvider).increment('${widget.moduleId}.played');

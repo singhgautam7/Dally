@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/game/game_category.dart';
 import '../../../core/game/game_module.dart';
+import '../../../core/storage/stat_aggregate.dart';
 import '../../../core/storage/stats_repository.dart';
 import '../../../core/theme/dally_tokens.dart';
 import '../../../core/util/format.dart';
@@ -33,16 +34,24 @@ class SnakeModule extends GameModule {
   Set<Vibe> get vibes => {Vibe.reflex, Vibe.leisure};
 
   @override
-  bool get supportsSaveResume => false;
+  GameCategory get category => GameCategory.classic;
 
   @override
-  List<StatSpec> get statSpecs => const [
-        StatSpec(key: 'highScore', label: 'Best length', format: StatFormat.number, higherIsBetter: true),
-      ];
+  GameLength get typicalLength => GameLength.short;
+
+  @override
+  List<String> get tags => const ['reflex', 'grid', 'swipe', 'endless', 'serpent'];
+
+  @override
+  String get styleNoun => 'Snake & food';
+
+  @override
+  bool get supportsSaveResume => false;
+
 
   @override
   List<StyleOption> get styleOptions => const [
-        StyleOption(id: 'classic', label: 'Classic'),
+        StyleOption(id: 'classic', label: 'Classic', recommended: true),
         StyleOption(id: 'ribbon', label: 'Ribbon'),
         StyleOption(id: 'pixel', label: 'Pixel'),
       ];
@@ -53,6 +62,39 @@ class SnakeModule extends GameModule {
     return s == null ? null : 'Best ${formatGrouped(s)}';
   }
 
+
+  @override
+  List<StatBlock> statBlocks(GameAggregate agg) {
+    final score = agg.metric('score');
+    return [
+      StatBlock.hero(
+        title: 'Best length',
+        cell: StatCell.metric('Best length', score, StatFormat.number,
+            higherIsBetter: true, accent: true),
+      ),
+      StatBlock.cells(cells: [
+        StatCell.count('Runs', agg.sessions),
+        StatCell.average('Average', score, StatFormat.number),
+        StatCell.metric('Longest run', agg.metric('duration'), StatFormat.duration,
+            higherIsBetter: true),
+        StatCell('Play time', StatFormat.duration.render(agg.seconds), earned: agg.seconds > 0),
+      ]),
+      for (final speed in const ['Slow', 'Normal', 'Fast'])
+        if (agg.configs.keys.any((k) => k.startsWith(speed)))
+          StatBlock.cells(title: speed, cells: [
+            for (final entry in agg.configs.entries)
+              if (entry.key.startsWith(speed))
+                StatCell.metric(entry.key.replaceFirst('\$speed · ', ''),
+                    entry.value.metric('score'), StatFormat.number, higherIsBetter: true),
+          ]),
+    ];
+  }
+
+  @override
+  String? statSummary(GameAggregate agg) {
+    final best = agg.metric('score').best(higherIsBetter: true);
+    return best == null ? null : 'Best \${formatGrouped(best)}';
+  }
   @override
   Widget buildSetupScreen(BuildContext context, WidgetRef ref) =>
       SetupSnakeScreen(moduleId: id);

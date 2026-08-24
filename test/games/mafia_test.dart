@@ -78,7 +78,9 @@ void main() {
     test('reshuffles for a new cycle and avoids immediate repeat', () {
       final deck = MafiaWordDeck(kMafiaWordPairs, random: Random(4));
       MafiaWordPair? last;
-      for (var i = 0; i < kMafiaWordPairs.length; i++) last = deck.draw();
+      for (var i = 0; i < kMafiaWordPairs.length; i++) {
+        last = deck.draw();
+      }
       final next = deck.draw(); // triggers refill
       expect(next.id, isNot(last!.id));
     });

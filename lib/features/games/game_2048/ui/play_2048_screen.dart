@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/storage/game_session.dart';
+import '../../../../core/game/session_recorder.dart';
 import '../../../../core/routing/routes.dart';
 import '../../../../core/game/how_to_launcher.dart';
 import '../../../../core/app_providers.dart';
@@ -34,6 +36,8 @@ class _Play2048ScreenState extends ConsumerState<Play2048Screen> {
   List<Tile2048> _ghosts = const [];
   double _best = 0;
   bool _wonDismissed = false;
+  DateTime _startedAt = DateTime.now();
+  bool _sessionRecorded = false;
 
   // One-level undo.
   List<int>? _undoValues;
@@ -86,6 +90,9 @@ class _Play2048ScreenState extends ConsumerState<Play2048Screen> {
     }
     _persist();
     _recordBests();
+    // A board with no legal move left is a finished session; a win the player
+    // keeps playing through is not, so it is recorded once, at the true end.
+    if (_gameOver) _recordSessionOnce();
 
     if (_won && !_wonDismissed) {
       Haptics.medium(ref);
@@ -109,8 +116,25 @@ class _Play2048ScreenState extends ConsumerState<Play2048Screen> {
       _wonDismissed = false;
       _undoValues = null;
     });
+    _startedAt = DateTime.now();
+    _sessionRecorded = false;
     _recordPlayed();
     Game2048Save.clear(ref.read(saveRepositoryProvider));
+  }
+
+  void _recordSessionOnce() {
+    if (_sessionRecorded) return;
+    _sessionRecorded = true;
+    recordSession(
+      ref,
+      gameId: widget.moduleId,
+      startedAt: _startedAt,
+      durationSeconds: DateTime.now().difference(_startedAt).inSeconds,
+      outcome: _won ? SessionOutcome.won : SessionOutcome.completed,
+      configLabel: '$_size×$_size',
+      score: _board.score,
+      extras: {'bestTile': _board.maxTile},
+    );
   }
 
   void _recordBests() {

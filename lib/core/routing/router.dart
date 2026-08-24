@@ -6,6 +6,8 @@ import '../../features/shell/about/about_screen.dart';
 import '../../features/shell/coming_soon_screen.dart';
 import '../../features/shell/home/home_screen.dart';
 import '../../features/shell/settings/settings_screen.dart';
+import '../../features/shell/stats/activity_screen.dart';
+import '../../features/shell/stats/game_stats_screen.dart';
 import '../../features/shell/stats/stats_screen.dart';
 import '../../features/shell/theme_picker/theme_picker_screen.dart';
 import '../../features/shell/welcome/welcome_screen.dart';
@@ -39,6 +41,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.stats,
         builder: (context, state) => const StatsScreen(),
+        routes: [
+          GoRoute(
+            path: 'activity',
+            builder: (context, state) => const ActivityScreen(),
+          ),
+          GoRoute(
+            path: Routes.statsGamePattern,
+            builder: (context, state) =>
+                GameStatsScreen(gameId: state.pathParameters['id']!),
+          ),
+        ],
       ),
       GoRoute(
         path: Routes.settings,

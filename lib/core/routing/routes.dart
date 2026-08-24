@@ -6,6 +6,11 @@ class Routes {
   static const String welcome = '/welcome';
   static const String home = '/';
   static const String stats = '/stats';
+  static const String statsActivity = '/stats/activity';
+
+  /// One game's stats page: `/stats/game/:id`.
+  static String statsGame(String id) => '/stats/game/$id';
+  static const String statsGamePattern = 'game/:id';
   static const String settings = '/settings';
   static const String about = '/about';
   static const String theme = '/theme';
