@@ -21,6 +21,7 @@ _Settings _$SettingsFromJson(Map<String, dynamic> json) => _Settings(
       $enumDecodeNullable(_$HandednessEnumMap, json['handedness']) ??
       Handedness.right,
   longPressMs: (json['longPressMs'] as num?)?.toInt() ?? 400,
+  reduceMotion: json['reduceMotion'] as bool? ?? false,
   styleChoices:
       (json['styleChoices'] as Map<String, dynamic>?)?.map(
         (k, e) => MapEntry(k, e as String),
@@ -36,6 +37,7 @@ Map<String, dynamic> _$SettingsToJson(_Settings instance) => <String, dynamic>{
   'onScreenControls': _$OnScreenControlsEnumMap[instance.onScreenControls]!,
   'handedness': _$HandednessEnumMap[instance.handedness]!,
   'longPressMs': instance.longPressMs,
+  'reduceMotion': instance.reduceMotion,
   'styleChoices': instance.styleChoices,
 };
 

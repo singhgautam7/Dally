@@ -15,7 +15,9 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$Settings {
 
- int get schemaVersion; String get paletteId; bool get hapticsEnabled; bool get soundEnabled; OnScreenControls get onScreenControls; Handedness get handedness; int get longPressMs;/// Per-game selected style option, keyed by `gameId` → `styleOptionId`.
+ int get schemaVersion; String get paletteId; bool get hapticsEnabled; bool get soundEnabled; OnScreenControls get onScreenControls; Handedness get handedness; int get longPressMs;/// Collapses every animation to instant. Layered on top of the OS
+/// accessibility setting, never instead of it.
+ bool get reduceMotion;/// Per-game selected style option, keyed by `gameId` → `styleOptionId`.
  Map<String, String> get styleChoices;
 /// Create a copy of Settings
 /// with the given fields replaced by the non-null parameter values.
@@ -29,16 +31,16 @@ $SettingsCopyWith<Settings> get copyWith => _$SettingsCopyWithImpl<Settings>(thi
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is Settings&&(identical(other.schemaVersion, schemaVersion) || other.schemaVersion == schemaVersion)&&(identical(other.paletteId, paletteId) || other.paletteId == paletteId)&&(identical(other.hapticsEnabled, hapticsEnabled) || other.hapticsEnabled == hapticsEnabled)&&(identical(other.soundEnabled, soundEnabled) || other.soundEnabled == soundEnabled)&&(identical(other.onScreenControls, onScreenControls) || other.onScreenControls == onScreenControls)&&(identical(other.handedness, handedness) || other.handedness == handedness)&&(identical(other.longPressMs, longPressMs) || other.longPressMs == longPressMs)&&const DeepCollectionEquality().equals(other.styleChoices, styleChoices));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is Settings&&(identical(other.schemaVersion, schemaVersion) || other.schemaVersion == schemaVersion)&&(identical(other.paletteId, paletteId) || other.paletteId == paletteId)&&(identical(other.hapticsEnabled, hapticsEnabled) || other.hapticsEnabled == hapticsEnabled)&&(identical(other.soundEnabled, soundEnabled) || other.soundEnabled == soundEnabled)&&(identical(other.onScreenControls, onScreenControls) || other.onScreenControls == onScreenControls)&&(identical(other.handedness, handedness) || other.handedness == handedness)&&(identical(other.longPressMs, longPressMs) || other.longPressMs == longPressMs)&&(identical(other.reduceMotion, reduceMotion) || other.reduceMotion == reduceMotion)&&const DeepCollectionEquality().equals(other.styleChoices, styleChoices));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,schemaVersion,paletteId,hapticsEnabled,soundEnabled,onScreenControls,handedness,longPressMs,const DeepCollectionEquality().hash(styleChoices));
+int get hashCode => Object.hash(runtimeType,schemaVersion,paletteId,hapticsEnabled,soundEnabled,onScreenControls,handedness,longPressMs,reduceMotion,const DeepCollectionEquality().hash(styleChoices));
 
 @override
 String toString() {
-  return 'Settings(schemaVersion: $schemaVersion, paletteId: $paletteId, hapticsEnabled: $hapticsEnabled, soundEnabled: $soundEnabled, onScreenControls: $onScreenControls, handedness: $handedness, longPressMs: $longPressMs, styleChoices: $styleChoices)';
+  return 'Settings(schemaVersion: $schemaVersion, paletteId: $paletteId, hapticsEnabled: $hapticsEnabled, soundEnabled: $soundEnabled, onScreenControls: $onScreenControls, handedness: $handedness, longPressMs: $longPressMs, reduceMotion: $reduceMotion, styleChoices: $styleChoices)';
 }
 
 
@@ -49,7 +51,7 @@ abstract mixin class $SettingsCopyWith<$Res>  {
   factory $SettingsCopyWith(Settings value, $Res Function(Settings) _then) = _$SettingsCopyWithImpl;
 @useResult
 $Res call({
- int schemaVersion, String paletteId, bool hapticsEnabled, bool soundEnabled, OnScreenControls onScreenControls, Handedness handedness, int longPressMs, Map<String, String> styleChoices
+ int schemaVersion, String paletteId, bool hapticsEnabled, bool soundEnabled, OnScreenControls onScreenControls, Handedness handedness, int longPressMs, bool reduceMotion, Map<String, String> styleChoices
 });
 
 
@@ -66,7 +68,7 @@ class _$SettingsCopyWithImpl<$Res>
 
 /// Create a copy of Settings
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? schemaVersion = null,Object? paletteId = null,Object? hapticsEnabled = null,Object? soundEnabled = null,Object? onScreenControls = null,Object? handedness = null,Object? longPressMs = null,Object? styleChoices = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? schemaVersion = null,Object? paletteId = null,Object? hapticsEnabled = null,Object? soundEnabled = null,Object? onScreenControls = null,Object? handedness = null,Object? longPressMs = null,Object? reduceMotion = null,Object? styleChoices = null,}) {
   return _then(_self.copyWith(
 schemaVersion: null == schemaVersion ? _self.schemaVersion : schemaVersion // ignore: cast_nullable_to_non_nullable
 as int,paletteId: null == paletteId ? _self.paletteId : paletteId // ignore: cast_nullable_to_non_nullable
@@ -75,7 +77,8 @@ as bool,soundEnabled: null == soundEnabled ? _self.soundEnabled : soundEnabled /
 as bool,onScreenControls: null == onScreenControls ? _self.onScreenControls : onScreenControls // ignore: cast_nullable_to_non_nullable
 as OnScreenControls,handedness: null == handedness ? _self.handedness : handedness // ignore: cast_nullable_to_non_nullable
 as Handedness,longPressMs: null == longPressMs ? _self.longPressMs : longPressMs // ignore: cast_nullable_to_non_nullable
-as int,styleChoices: null == styleChoices ? _self.styleChoices : styleChoices // ignore: cast_nullable_to_non_nullable
+as int,reduceMotion: null == reduceMotion ? _self.reduceMotion : reduceMotion // ignore: cast_nullable_to_non_nullable
+as bool,styleChoices: null == styleChoices ? _self.styleChoices : styleChoices // ignore: cast_nullable_to_non_nullable
 as Map<String, String>,
   ));
 }
@@ -161,10 +164,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int schemaVersion,  String paletteId,  bool hapticsEnabled,  bool soundEnabled,  OnScreenControls onScreenControls,  Handedness handedness,  int longPressMs,  Map<String, String> styleChoices)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int schemaVersion,  String paletteId,  bool hapticsEnabled,  bool soundEnabled,  OnScreenControls onScreenControls,  Handedness handedness,  int longPressMs,  bool reduceMotion,  Map<String, String> styleChoices)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Settings() when $default != null:
-return $default(_that.schemaVersion,_that.paletteId,_that.hapticsEnabled,_that.soundEnabled,_that.onScreenControls,_that.handedness,_that.longPressMs,_that.styleChoices);case _:
+return $default(_that.schemaVersion,_that.paletteId,_that.hapticsEnabled,_that.soundEnabled,_that.onScreenControls,_that.handedness,_that.longPressMs,_that.reduceMotion,_that.styleChoices);case _:
   return orElse();
 
 }
@@ -182,10 +185,10 @@ return $default(_that.schemaVersion,_that.paletteId,_that.hapticsEnabled,_that.s
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int schemaVersion,  String paletteId,  bool hapticsEnabled,  bool soundEnabled,  OnScreenControls onScreenControls,  Handedness handedness,  int longPressMs,  Map<String, String> styleChoices)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int schemaVersion,  String paletteId,  bool hapticsEnabled,  bool soundEnabled,  OnScreenControls onScreenControls,  Handedness handedness,  int longPressMs,  bool reduceMotion,  Map<String, String> styleChoices)  $default,) {final _that = this;
 switch (_that) {
 case _Settings():
-return $default(_that.schemaVersion,_that.paletteId,_that.hapticsEnabled,_that.soundEnabled,_that.onScreenControls,_that.handedness,_that.longPressMs,_that.styleChoices);case _:
+return $default(_that.schemaVersion,_that.paletteId,_that.hapticsEnabled,_that.soundEnabled,_that.onScreenControls,_that.handedness,_that.longPressMs,_that.reduceMotion,_that.styleChoices);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -202,10 +205,10 @@ return $default(_that.schemaVersion,_that.paletteId,_that.hapticsEnabled,_that.s
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int schemaVersion,  String paletteId,  bool hapticsEnabled,  bool soundEnabled,  OnScreenControls onScreenControls,  Handedness handedness,  int longPressMs,  Map<String, String> styleChoices)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int schemaVersion,  String paletteId,  bool hapticsEnabled,  bool soundEnabled,  OnScreenControls onScreenControls,  Handedness handedness,  int longPressMs,  bool reduceMotion,  Map<String, String> styleChoices)?  $default,) {final _that = this;
 switch (_that) {
 case _Settings() when $default != null:
-return $default(_that.schemaVersion,_that.paletteId,_that.hapticsEnabled,_that.soundEnabled,_that.onScreenControls,_that.handedness,_that.longPressMs,_that.styleChoices);case _:
+return $default(_that.schemaVersion,_that.paletteId,_that.hapticsEnabled,_that.soundEnabled,_that.onScreenControls,_that.handedness,_that.longPressMs,_that.reduceMotion,_that.styleChoices);case _:
   return null;
 
 }
@@ -217,7 +220,7 @@ return $default(_that.schemaVersion,_that.paletteId,_that.hapticsEnabled,_that.s
 @JsonSerializable()
 
 class _Settings implements Settings {
-  const _Settings({this.schemaVersion = 1, this.paletteId = 'ink', this.hapticsEnabled = true, this.soundEnabled = false, this.onScreenControls = OnScreenControls.dpad, this.handedness = Handedness.right, this.longPressMs = 400, final  Map<String, String> styleChoices = const <String, String>{}}): _styleChoices = styleChoices;
+  const _Settings({this.schemaVersion = 1, this.paletteId = 'ink', this.hapticsEnabled = true, this.soundEnabled = false, this.onScreenControls = OnScreenControls.dpad, this.handedness = Handedness.right, this.longPressMs = 400, this.reduceMotion = false, final  Map<String, String> styleChoices = const <String, String>{}}): _styleChoices = styleChoices;
   factory _Settings.fromJson(Map<String, dynamic> json) => _$SettingsFromJson(json);
 
 @override@JsonKey() final  int schemaVersion;
@@ -227,6 +230,9 @@ class _Settings implements Settings {
 @override@JsonKey() final  OnScreenControls onScreenControls;
 @override@JsonKey() final  Handedness handedness;
 @override@JsonKey() final  int longPressMs;
+/// Collapses every animation to instant. Layered on top of the OS
+/// accessibility setting, never instead of it.
+@override@JsonKey() final  bool reduceMotion;
 /// Per-game selected style option, keyed by `gameId` → `styleOptionId`.
  final  Map<String, String> _styleChoices;
 /// Per-game selected style option, keyed by `gameId` → `styleOptionId`.
@@ -250,16 +256,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Settings&&(identical(other.schemaVersion, schemaVersion) || other.schemaVersion == schemaVersion)&&(identical(other.paletteId, paletteId) || other.paletteId == paletteId)&&(identical(other.hapticsEnabled, hapticsEnabled) || other.hapticsEnabled == hapticsEnabled)&&(identical(other.soundEnabled, soundEnabled) || other.soundEnabled == soundEnabled)&&(identical(other.onScreenControls, onScreenControls) || other.onScreenControls == onScreenControls)&&(identical(other.handedness, handedness) || other.handedness == handedness)&&(identical(other.longPressMs, longPressMs) || other.longPressMs == longPressMs)&&const DeepCollectionEquality().equals(other._styleChoices, _styleChoices));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Settings&&(identical(other.schemaVersion, schemaVersion) || other.schemaVersion == schemaVersion)&&(identical(other.paletteId, paletteId) || other.paletteId == paletteId)&&(identical(other.hapticsEnabled, hapticsEnabled) || other.hapticsEnabled == hapticsEnabled)&&(identical(other.soundEnabled, soundEnabled) || other.soundEnabled == soundEnabled)&&(identical(other.onScreenControls, onScreenControls) || other.onScreenControls == onScreenControls)&&(identical(other.handedness, handedness) || other.handedness == handedness)&&(identical(other.longPressMs, longPressMs) || other.longPressMs == longPressMs)&&(identical(other.reduceMotion, reduceMotion) || other.reduceMotion == reduceMotion)&&const DeepCollectionEquality().equals(other._styleChoices, _styleChoices));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,schemaVersion,paletteId,hapticsEnabled,soundEnabled,onScreenControls,handedness,longPressMs,const DeepCollectionEquality().hash(_styleChoices));
+int get hashCode => Object.hash(runtimeType,schemaVersion,paletteId,hapticsEnabled,soundEnabled,onScreenControls,handedness,longPressMs,reduceMotion,const DeepCollectionEquality().hash(_styleChoices));
 
 @override
 String toString() {
-  return 'Settings(schemaVersion: $schemaVersion, paletteId: $paletteId, hapticsEnabled: $hapticsEnabled, soundEnabled: $soundEnabled, onScreenControls: $onScreenControls, handedness: $handedness, longPressMs: $longPressMs, styleChoices: $styleChoices)';
+  return 'Settings(schemaVersion: $schemaVersion, paletteId: $paletteId, hapticsEnabled: $hapticsEnabled, soundEnabled: $soundEnabled, onScreenControls: $onScreenControls, handedness: $handedness, longPressMs: $longPressMs, reduceMotion: $reduceMotion, styleChoices: $styleChoices)';
 }
 
 
@@ -270,7 +276,7 @@ abstract mixin class _$SettingsCopyWith<$Res> implements $SettingsCopyWith<$Res>
   factory _$SettingsCopyWith(_Settings value, $Res Function(_Settings) _then) = __$SettingsCopyWithImpl;
 @override @useResult
 $Res call({
- int schemaVersion, String paletteId, bool hapticsEnabled, bool soundEnabled, OnScreenControls onScreenControls, Handedness handedness, int longPressMs, Map<String, String> styleChoices
+ int schemaVersion, String paletteId, bool hapticsEnabled, bool soundEnabled, OnScreenControls onScreenControls, Handedness handedness, int longPressMs, bool reduceMotion, Map<String, String> styleChoices
 });
 
 
@@ -287,7 +293,7 @@ class __$SettingsCopyWithImpl<$Res>
 
 /// Create a copy of Settings
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? schemaVersion = null,Object? paletteId = null,Object? hapticsEnabled = null,Object? soundEnabled = null,Object? onScreenControls = null,Object? handedness = null,Object? longPressMs = null,Object? styleChoices = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? schemaVersion = null,Object? paletteId = null,Object? hapticsEnabled = null,Object? soundEnabled = null,Object? onScreenControls = null,Object? handedness = null,Object? longPressMs = null,Object? reduceMotion = null,Object? styleChoices = null,}) {
   return _then(_Settings(
 schemaVersion: null == schemaVersion ? _self.schemaVersion : schemaVersion // ignore: cast_nullable_to_non_nullable
 as int,paletteId: null == paletteId ? _self.paletteId : paletteId // ignore: cast_nullable_to_non_nullable
@@ -296,7 +302,8 @@ as bool,soundEnabled: null == soundEnabled ? _self.soundEnabled : soundEnabled /
 as bool,onScreenControls: null == onScreenControls ? _self.onScreenControls : onScreenControls // ignore: cast_nullable_to_non_nullable
 as OnScreenControls,handedness: null == handedness ? _self.handedness : handedness // ignore: cast_nullable_to_non_nullable
 as Handedness,longPressMs: null == longPressMs ? _self.longPressMs : longPressMs // ignore: cast_nullable_to_non_nullable
-as int,styleChoices: null == styleChoices ? _self._styleChoices : styleChoices // ignore: cast_nullable_to_non_nullable
+as int,reduceMotion: null == reduceMotion ? _self.reduceMotion : reduceMotion // ignore: cast_nullable_to_non_nullable
+as bool,styleChoices: null == styleChoices ? _self._styleChoices : styleChoices // ignore: cast_nullable_to_non_nullable
 as Map<String, String>,
   ));
 }

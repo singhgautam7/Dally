@@ -38,6 +38,9 @@ class SettingsController extends Notifier<Settings> {
   Future<void> setLongPressMs(int value) =>
       _persist(state.copyWith(longPressMs: value));
 
+  Future<void> setReduceMotion(bool value) =>
+      _persist(state.copyWith(reduceMotion: value));
+
   Future<void> setStyleChoice(String gameId, String styleId) {
     final next = Map<String, String>.from(state.styleChoices)..[gameId] = styleId;
     return _persist(state.copyWith(styleChoices: next));

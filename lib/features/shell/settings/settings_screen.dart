@@ -101,6 +101,15 @@ class SettingsScreen extends ConsumerWidget {
                     _Row(
                       tokens: t,
                       child: DallyToggle(
+                        title: 'Reduce motion',
+                        subtitle: 'Board animations play instantly',
+                        value: settings.reduceMotion,
+                        onChanged: (v) => controller.setReduceMotion(v),
+                      ),
+                    ),
+                    _Row(
+                      tokens: t,
+                      child: DallyToggle(
                         title: 'Sound',
                         value: settings.soundEnabled,
                         onChanged: (v) => controller.setSound(v),

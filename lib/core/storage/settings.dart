@@ -22,6 +22,10 @@ abstract class Settings with _$Settings {
     @Default(Handedness.right) Handedness handedness,
     @Default(400) int longPressMs,
 
+    /// Collapses every animation to instant. Layered on top of the OS
+    /// accessibility setting, never instead of it.
+    @Default(false) bool reduceMotion,
+
     /// Per-game selected style option, keyed by `gameId` → `styleOptionId`.
     @Default(<String, String>{}) Map<String, String> styleChoices,
   }) = _Settings;
