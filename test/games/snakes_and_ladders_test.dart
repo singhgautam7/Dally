@@ -102,6 +102,14 @@ void main() {
       expect(build(3), isNot(build(4)));
     });
 
+    test('a board stays legible — few enough links to read', () {
+      for (var seed = 0; seed < 20; seed++) {
+        final links = generateLinks(DallyRandom.seeded(seed), columns: 10, rows: 10);
+        expect(links.length, inInclusiveRange(4, 10),
+            reason: 'seed $seed drew ${links.length} links on a 10x10');
+      }
+    });
+
     test('every endpoint is distinct, so no roll ever resolves twice', () {
       for (var seed = 0; seed < 40; seed++) {
         for (final (c, r) in const [(6, 6), (8, 8), (10, 10)]) {
@@ -118,14 +126,15 @@ void main() {
       }
     });
 
-    test('every link spans at least two rows and points the right way', () {
+    test('every link spans two to four rows and points the right way', () {
       for (var seed = 0; seed < 40; seed++) {
         final links = generateLinks(DallyRandom.seeded(seed), columns: 10, rows: 10);
         expect(links, isNotEmpty);
         for (final l in links) {
           final fromRow = (l.from - 1) ~/ 10;
           final toRow = (l.to - 1) ~/ 10;
-          expect((toRow - fromRow).abs(), greaterThanOrEqualTo(2));
+          expect((toRow - fromRow).abs(), inInclusiveRange(2, 4),
+              reason: 'a link that crosses the whole board makes it unreadable');
         }
         expect(links.any((l) => l.isLadder), isTrue);
         expect(links.any((l) => !l.isLadder), isTrue);

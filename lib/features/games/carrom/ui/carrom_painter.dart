@@ -27,6 +27,10 @@ class CarromPainter extends CustomPainter {
     required this.onAccent,
     required this.danger,
     required this.textFaint,
+    required this.coinLight,
+    required this.coinLightOutline,
+    required this.coinDark,
+    required this.coinDarkOutline,
     required this.aim,
     required this.showBaseline,
   });
@@ -42,6 +46,15 @@ class CarromPainter extends CustomPainter {
   final Color onAccent;
   final Color danger;
   final Color textFaint;
+
+  /// The two sides. Carrom has the same problem Chess does — one side has to
+  /// read as "light" and one as "dark" in all eight palettes — so it takes the
+  /// same answer: the shared fixed piece colours. Deriving them from `surface`
+  /// or `ink` instead makes one side vanish into the board on half the themes.
+  final Color coinLight;
+  final Color coinLightOutline;
+  final Color coinDark;
+  final Color coinDarkOutline;
 
   /// Direction and power of the shot being aimed, in board units.
   final (Offset direction, double power)? aim;
@@ -139,22 +152,38 @@ class CarromPainter extends CustomPainter {
       if (disc.pocketed) continue;
       final centre = toCanvas(disc.position, side);
       final radius = disc.radius * play;
-      final (fill, edge) = switch (disc.kind) {
-        CoinKind.striker => (accent, onAccent),
-        CoinKind.queen => (danger, onAccent),
-        CoinKind.light => (surfaceAlt, ink),
-        CoinKind.dark => (ink, surface),
-      };
+      final (fill, edge) = coinColours(
+        disc.kind,
+        coinLight: coinLight,
+        coinLightOutline: coinLightOutline,
+        coinDark: coinDark,
+        coinDarkOutline: coinDarkOutline,
+        striker: ink,
+        strikerOutline: surface,
+        queen: danger,
+        queenOutline: onAccent,
+      );
       canvas.drawCircle(centre, radius, Paint()..color = fill);
       canvas.drawCircle(
         centre,
         radius - 0.5,
         Paint()
-          ..color = edge.withValues(alpha: 0.5)
+          ..color = edge.withValues(alpha: 0.7)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 1,
+          ..strokeWidth = 1.2,
       );
-      if (style == CoinStyle.ringed) {
+      // The striker always wears its ring, whatever the coin style: it is the
+      // one disc you may touch, and size alone is too subtle to say so.
+      if (disc.kind == CoinKind.striker) {
+        canvas.drawCircle(
+          centre,
+          radius * 0.5,
+          Paint()
+            ..color = edge.withValues(alpha: 0.8)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.4,
+        );
+      } else if (style == CoinStyle.ringed) {
         canvas.drawCircle(
           centre,
           radius * 0.55,
@@ -198,3 +227,23 @@ class CarromPainter extends CustomPainter {
   @override
   bool shouldRepaint(CarromPainter old) => true;
 }
+
+/// The one place a disc's colours are decided, so the board, the score row and
+/// the style preview can never drift apart.
+(Color fill, Color edge) coinColours(
+  CoinKind kind, {
+  required Color coinLight,
+  required Color coinLightOutline,
+  required Color coinDark,
+  required Color coinDarkOutline,
+  required Color striker,
+  required Color strikerOutline,
+  required Color queen,
+  required Color queenOutline,
+}) =>
+    switch (kind) {
+      CoinKind.striker => (striker, strikerOutline),
+      CoinKind.queen => (queen, queenOutline),
+      CoinKind.light => (coinLight, coinLightOutline),
+      CoinKind.dark => (coinDark, coinDarkOutline),
+    };

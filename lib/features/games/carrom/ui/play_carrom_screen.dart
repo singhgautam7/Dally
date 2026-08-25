@@ -278,6 +278,10 @@ class _PlayCarromScreenState extends ConsumerState<PlayCarromScreen>
                   onAccent: t.onAccent,
                   danger: t.danger,
                   textFaint: t.textFaint,
+                  coinLight: t.pieceLight,
+                  coinLightOutline: t.pieceLightOutline,
+                  coinDark: t.pieceDark,
+                  coinDarkOutline: t.pieceDarkOutline,
                   aim: _phase == _Phase.aiming && power > 0
                       ? (_pull, power)
                       : null,
@@ -342,7 +346,9 @@ class _ScoreRow extends StatelessWidget {
               height: 12,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: team == 0 ? t.surfaceAlt : t.textPrimary,
+                // The same two fixed colours the board draws, so the score row
+                // is readable as "that side's coins" and not a second scheme.
+                color: team == 0 ? t.pieceLight : t.pieceDark,
                 border: Border.all(color: active ? t.accent : t.border, width: 2),
               ),
             ),
@@ -398,12 +404,14 @@ class _CoinPreview extends StatelessWidget {
       child: CustomPaint(
         painter: _CoinPreviewPainter(
           style: coinStyleFromId(styleId),
-          surfaceAlt: t.surfaceAlt,
           ink: t.textPrimary,
           surface: t.surface,
-          accent: t.accent,
           onAccent: t.onAccent,
           danger: t.danger,
+          coinLight: t.pieceLight,
+          coinLightOutline: t.pieceLightOutline,
+          coinDark: t.pieceDark,
+          coinDarkOutline: t.pieceDarkOutline,
         ),
       ),
     );
@@ -413,16 +421,19 @@ class _CoinPreview extends StatelessWidget {
 class _CoinPreviewPainter extends CustomPainter {
   _CoinPreviewPainter({
     required this.style,
-    required this.surfaceAlt,
     required this.ink,
     required this.surface,
-    required this.accent,
     required this.onAccent,
     required this.danger,
+    required this.coinLight,
+    required this.coinLightOutline,
+    required this.coinDark,
+    required this.coinDarkOutline,
   });
 
   final CoinStyle style;
-  final Color surfaceAlt, ink, surface, accent, onAccent, danger;
+  final Color ink, surface, onAccent, danger;
+  final Color coinLight, coinLightOutline, coinDark, coinDarkOutline;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -430,21 +441,26 @@ class _CoinPreviewPainter extends CustomPainter {
     final radius = size.height * 0.4;
     for (var i = 0; i < kinds.length; i++) {
       final centre = Offset(radius + i * (size.width / kinds.length), size.height / 2);
-      final (fill, edge) = switch (kinds[i]) {
-        CoinKind.striker => (accent, onAccent),
-        CoinKind.queen => (danger, onAccent),
-        CoinKind.light => (surfaceAlt, ink),
-        CoinKind.dark => (ink, surface),
-      };
+      final (fill, edge) = coinColours(
+        kinds[i],
+        coinLight: coinLight,
+        coinLightOutline: coinLightOutline,
+        coinDark: coinDark,
+        coinDarkOutline: coinDarkOutline,
+        striker: ink,
+        strikerOutline: surface,
+        queen: danger,
+        queenOutline: onAccent,
+      );
       canvas.drawCircle(centre, radius, Paint()..color = fill);
       canvas.drawCircle(
           centre,
           radius - 0.5,
           Paint()
-            ..color = edge.withValues(alpha: 0.5)
+            ..color = edge.withValues(alpha: 0.7)
             ..style = PaintingStyle.stroke
-            ..strokeWidth = 1);
-      if (style == CoinStyle.ringed) {
+            ..strokeWidth = 1.2);
+      if (kinds[i] == CoinKind.striker || style == CoinStyle.ringed) {
         canvas.drawCircle(
             centre,
             radius * 0.55,

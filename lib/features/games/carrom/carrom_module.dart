@@ -107,8 +107,10 @@ class CarromModule extends GameModule {
           'red queen belongs to whoever pots it and covers it.',
       readingLabel: 'Reading the board',
       reading: [
-        HowToLegend(Icon(Icons.circle, size: 16, color: t.accent),
-            'The striker — the one disc you flick.'),
+        HowToLegend(Icon(Icons.adjust_rounded, size: 18, color: t.textPrimary),
+            'The striker — the ringed disc, the only one you flick.'),
+        HowToLegend(Icon(Icons.circle, size: 16, color: t.pieceLight),
+            'One side\'s nine coins; the other side takes the accent colour.'),
         HowToLegend(Icon(Icons.circle, size: 16, color: t.danger),
             'The queen. Pot one of your own coins after it, or it goes back.'),
         HowToLegend(Icon(Icons.remove_rounded, size: 18, color: t.accent),

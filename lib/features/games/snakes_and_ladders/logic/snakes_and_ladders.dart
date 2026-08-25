@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 
 import '../../../../core/util/dally_random.dart';
@@ -26,11 +28,16 @@ class Link {
 /// * every endpoint (foot, top, head, tail) is a distinct square, so no link
 ///   can ever chain into another and no single roll resolves twice;
 /// * square 1 and the last square are never an endpoint;
-/// * a link always spans at least two rows, so it is worth drawing;
+/// * a link spans **two to four rows** — long enough to matter, short enough
+///   that the board stays legible instead of becoming a cat's cradle;
 /// * ladders climb, snakes drop.
+///
+/// The counts are deliberately low. An earlier version put a link on every
+/// twelfth square with an unbounded span, which on a 10x10 drew sixteen lines
+/// across the whole board and buried the numbers underneath them.
 List<Link> generateLinks(DallyRandom random, {required int columns, required int rows}) {
   final squares = columns * rows;
-  final pairs = (squares / 12).round().clamp(2, 12);
+  final pairs = (squares / 25).round().clamp(2, 5);
   final used = <int>{1, squares};
   final links = <Link>[];
 
@@ -51,7 +58,9 @@ List<Link> generateLinks(DallyRandom random, {required int columns, required int
       final lowRow = (low - 1) ~/ columns;
       final minRow = lowRow + 2;
       if (minRow >= rows) continue;
-      final high = freeSquare(minRow * columns + 1, squares - 1);
+      final maxRow = math.min(rows - 1, lowRow + 4);
+      final high = freeSquare(
+          minRow * columns + 1, math.min(squares - 1, (maxRow + 1) * columns));
       if (high == null || high == low) continue;
       used
         ..add(low)

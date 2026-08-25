@@ -56,7 +56,9 @@ class _PlaySnakesScreenState extends ConsumerState<PlaySnakesScreen>
   double _walkTo = 1;
   int _walking = -1;
   (int, Link)? _riding;
-  int _lastFace = 1;
+  /// Null until the first roll — a die showing a face nobody rolled reads as a
+  /// result that never happened.
+  int? _lastFace;
 
   @override
   bool get motionReduced => _reduceMotion;
@@ -97,6 +99,7 @@ class _PlaySnakesScreenState extends ConsumerState<PlaySnakesScreen>
     _recorded = false;
     _busy = false;
     _riding = null;
+    _lastFace = null;
     _climbs = 0;
     _slides = 0;
     _strip = '${widget.config.nameOf(_game.current)} starts — roll';
@@ -258,8 +261,10 @@ class _PlaySnakesScreenState extends ConsumerState<PlaySnakesScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              DieChip(value: _lastFace, style: DiceStyle.classic, size: 34),
-              const Gap.h(Insets.s3),
+              if (_lastFace != null) ...[
+                DieChip(value: _lastFace!, style: DiceStyle.classic, size: 34),
+                const Gap.h(Insets.s3),
+              ],
               Flexible(
                 child: Text(_strip,
                     textAlign: TextAlign.center,
