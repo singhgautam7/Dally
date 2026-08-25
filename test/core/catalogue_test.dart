@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dally/core/game/game_category.dart';
 import 'package:dally/core/game/game_registry.dart';
 import 'package:dally/features/shell/home/home_filter.dart';
@@ -7,6 +9,13 @@ void main() {
   final registry = kGameModules;
 
   group('registry integrity', () {
+    test('every game has its glyph asset on disk', () {
+      for (final m in registry) {
+        expect(File('assets/glyphs/${m.id}.svg').existsSync(), isTrue,
+            reason: 'assets/glyphs/${m.id}.svg is missing');
+      }
+    });
+
     test('every game id is unique and stable-looking', () {
       final ids = registry.map((m) => m.id).toList();
       expect(ids.toSet().length, ids.length, reason: 'duplicate game id');
@@ -43,6 +52,8 @@ void main() {
       const forbidden = [
         'tetris', 'kenken', 'othello', 'connect four', 'mastermind', 'picross',
         'candy crush', 'doodle jump', 'flappy', 'wordle', 'monopoly', 'scrabble',
+        'ludo king', 'chutes and ladders', 'boggle', 'woodoku', 'block blast',
+        'uno', 'jenga', 'risk', 'cluedo', 'battleship',
       ];
       for (final m in registry) {
         final haystack = '${m.id} ${m.title} ${m.tagline} ${m.tags.join(' ')}'.toLowerCase();

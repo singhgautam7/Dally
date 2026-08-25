@@ -33,5 +33,5 @@ written for this project and carries no upstream licence. It is deliberately
 finite: there is no ongoing authoring step and nothing to keep updated.
 
 The invariants (4–8 letters, no duplicates, every answer present in
-`dictionary.txt`) are enforced by `test/games/word_list_test.dart`, not by
+`dictionary.txt`) are enforced by `test/games/words_test.dart`, not by
 convention.
