@@ -13,6 +13,7 @@ import '../../features/games/snakes_and_ladders/snakes_module.dart';
 import '../../features/games/solitaire/solitaire_module.dart';
 import '../../features/games/sudoku/sudoku_module.dart';
 import '../../features/games/tic_tac_toe/tic_tac_toe_module.dart';
+import '../../features/games/words/words_modules.dart';
 import '../../features/games/quick_play/bottle_spinner/bottle_spinner_module.dart';
 import '../../features/games/quick_play/coin_flip/coin_flip_module.dart';
 import '../../features/games/quick_play/dice/dice_module.dart';
@@ -51,6 +52,11 @@ final List<GameModule> kGameModules = <GameModule>[
   LudoModule(),
   SnakesAndLaddersModule(),
   SolitaireModule(),
+
+  // Word — three games sharing one bundled, offline word list.
+  WordGuessModule(),
+  AnagramsModule(),
+  WordSearchModule(),
 
   // Mental Math — six drills sharing one difficulty, set on home.
   ArithmeticSprintModule(),

@@ -37,8 +37,12 @@ class WordList {
 
   static Future<WordList> load({AssetBundle? bundle}) async {
     final assets = bundle ?? rootBundle;
-    final answersRaw = await assets.loadString('assets/words/answers.txt');
-    final dictionaryRaw = await assets.loadString('assets/words/dictionary.txt');
+    // `loadString` hands anything sizeable to a background isolate, which costs
+    // more to spin up than decoding half a megabyte costs here — and makes the
+    // read invisible to a widget test's fake async. Decoding the bytes directly
+    // keeps it one cheap, testable step.
+    final answersRaw = await _read(assets, 'assets/words/answers.txt');
+    final dictionaryRaw = await _read(assets, 'assets/words/dictionary.txt');
 
     final answers = <int, List<String>>{};
     for (final line in const LineSplitter().convert(answersRaw)) {
@@ -52,6 +56,11 @@ class WordList {
       if (word.isNotEmpty) dictionary.add(word);
     }
     return WordList._(answers, dictionary);
+  }
+
+  static Future<String> _read(AssetBundle bundle, String key) async {
+    final data = await bundle.load(key);
+    return utf8.decode(data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
   }
 
   int get answerCount => _answers.values.fold(0, (n, list) => n + list.length);
