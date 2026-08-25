@@ -48,6 +48,7 @@ flutter:
   assets:
     - assets/glyphs/
     - assets/styles/
+    - assets/words/
 
   fonts:
     - family: Space Grotesk
