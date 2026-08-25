@@ -4,6 +4,7 @@ import '../../features/games/chess/chess_module.dart';
 import '../../features/games/dots_and_boxes/dots_and_boxes_module.dart';
 import '../../features/games/fifteen_puzzle/fifteen_puzzle_module.dart';
 import '../../features/games/game_2048/game_2048_module.dart';
+import '../../features/games/ludo/ludo_module.dart';
 import '../../features/games/memory/memory_module.dart';
 import '../../features/games/mafia/mafia_module.dart';
 import '../../features/games/minesweeper/minesweeper_module.dart';
@@ -45,6 +46,7 @@ final List<GameModule> kGameModules = <GameModule>[
   ChessModule(),
   MafiaModule(),
   DotsAndBoxesModule(),
+  LudoModule(),
 
   // Mental Math — six drills sharing one difficulty, set on home.
   ArithmeticSprintModule(),

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/theme/dally_tokens.dart';
-import '../../../../core/theme/spacing.dart';
-import '../../../../core/theme/type_scale.dart';
+import '../theme/dally_tokens.dart';
+import '../theme/spacing.dart';
+import '../theme/type_scale.dart';
 
 enum DiceStyle { classic, numeral, pixel, tally }
 

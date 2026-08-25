@@ -17,7 +17,7 @@ import '../../../../core/widgets/primary_pill.dart';
 import '../../../../core/widgets/style_picker_sheet.dart';
 import '../ui/quick_play_scaffold.dart';
 import 'dice_logic.dart';
-import 'dice_painter.dart';
+import '../../../../core/widgets/die_view.dart';
 
 /// Dice — one to six d6. Each die cycles four random faces at 70ms, staggered
 /// 40ms per die; the total counts up over 300ms once the last die settles.
