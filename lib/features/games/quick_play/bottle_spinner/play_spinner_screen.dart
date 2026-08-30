@@ -91,7 +91,7 @@ class _PlaySpinnerScreenState extends ConsumerState<PlaySpinnerScreen>
       _winner = result.seatIndex;
       if (_winner >= 0) _hits[_winner] = (_hits[_winner] ?? 0) + 1;
     });
-    if (reduceMotionOf(context)) {
+    if (readReduceMotion(context, ref)) {
       _spin.value = 1;
       Haptics.light(ref);
       return;

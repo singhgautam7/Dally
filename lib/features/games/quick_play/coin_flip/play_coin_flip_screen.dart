@@ -106,7 +106,7 @@ class _PlayCoinFlipScreenState extends ConsumerState<PlayCoinFlipScreen>
         _run = _run.add(f);
       }
     });
-    if (reduceMotionOf(context)) {
+    if (readReduceMotion(context, ref)) {
       setState(() => _shown = faces.first);
       Haptics.light(ref);
       Sounds.play(ref, Sfx.coinFlip);
@@ -191,6 +191,7 @@ class _PlayCoinFlipScreenState extends ConsumerState<PlayCoinFlipScreen>
                       onAccent: t.onAccent,
                       surface: t.surface,
                       border: t.border,
+                      bg: t.bg,
                       squash: _flip.isAnimating ? _squash(_phaseOf(0)) : 1,
                     ),
                   ),

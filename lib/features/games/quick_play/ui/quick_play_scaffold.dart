@@ -10,6 +10,8 @@ import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/widgets/how_to_play.dart';
 import '../../../../core/widgets/pause_sheet.dart';
 import '../../../../core/widgets/style_picker_sheet.dart';
+import '../../../../core/widgets/dally_sheet.dart';
+import '../../../../core/widgets/primary_pill.dart';
 
 /// The shared Quick Play shell: title left, overflow right, the result at the
 /// optical centre, and configuration in a bottom strip that dims to 40% during
@@ -91,19 +93,7 @@ class _QuickPlayScaffoldState extends ConsumerState<QuickPlayScaffold> {
                         ],
                       ),
                     ),
-                    Semantics(
-                      button: true,
-                      label: 'More',
-                      child: InkResponse(
-                        onTap: () => _openSheet(context, ref),
-                        radius: 24,
-                        child: SizedBox(
-                          width: 40,
-                          height: 40,
-                          child: Icon(Icons.more_vert_rounded, color: t.textFaint, size: 20),
-                        ),
-                      ),
-                    ),
+                    OverflowButton(onTap: () => _openSheet(context, ref)),
                   ],
                 ),
                 Expanded(
@@ -167,21 +157,16 @@ Future<PauseResult?> showQuickPlaySheet(
   VoidCallback? onHowToPlay,
   List<Widget> extraRows = const [],
 }) {
-  final t = context.tokens;
-  return showModalBottomSheet<PauseResult>(
-    context: context,
-    backgroundColor: t.surface,
-    barrierColor: Colors.black.withValues(alpha: 0.6),
+  return showDallySheet<PauseResult>(
+    context,
     isScrollControlled: true,
-    showDragHandle: true,
-    shape: RoundedRectangleBorder(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      side: BorderSide(color: t.border),
-    ),
     builder: (sheetContext) {
       final t = sheetContext.tokens;
       return SafeArea(
-        child: Padding(
+        // Same reason as the game pause sheet: an open-ended row list on a
+        // short phone or at a large text scale must scroll, not clip.
+        child: SingleChildScrollView(
+          child: Padding(
           padding: const EdgeInsets.fromLTRB(Insets.s5, 0, Insets.s5, Insets.s5),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -210,6 +195,7 @@ Future<PauseResult?> showQuickPlaySheet(
                 onTap: () => Navigator.of(sheetContext).pop(PauseResult.exit),
               ),
             ],
+          ),
           ),
         ),
       );

@@ -18,9 +18,9 @@ import '../../../../core/widgets/board_chip.dart';
 import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/widgets/game_scaffold.dart';
 import '../../../../core/widgets/pause_sheet.dart';
-import '../../../../core/widgets/primary_pill.dart';
 import '../fifteen_config.dart';
 import '../logic/fifteen_board.dart';
+import '../../../../core/widgets/game_over_strip.dart';
 
 class PlayFifteenScreen extends ConsumerStatefulWidget {
   const PlayFifteenScreen({super.key, required this.moduleId, required this.config});
@@ -43,7 +43,7 @@ class _PlayFifteenScreenState extends ConsumerState<PlayFifteenScreen>
   void initState() {
     super.initState();
     initClock();
-    _board = FifteenBoard(size: _size)..shuffle();
+    _board = FifteenBoard(size: _size, rng: ref.read(randomProvider).asRandom)..shuffle();
     ref.read(statsRepositoryProvider).increment('${widget.moduleId}.played');
   }
 
@@ -94,7 +94,7 @@ class _PlayFifteenScreenState extends ConsumerState<PlayFifteenScreen>
 
   void _restart() {
     setState(() {
-      _board = FifteenBoard(size: _size)..shuffle();
+      _board = FifteenBoard(size: _size, rng: ref.read(randomProvider).asRandom)..shuffle();
       _solved = false;
       _startedAt = DateTime.now();
     });
@@ -151,11 +151,25 @@ class _PlayFifteenScreenState extends ConsumerState<PlayFifteenScreen>
           ),
         ],
       ),
-      board: _Board(board: _board, onTap: _tap, solved: _solved),
+      board: _Board(
+        board: _board,
+        onTap: _tap,
+        solved: _solved,
+        slide: reduceMotionEnabled(context, ref)
+            ? Duration.zero
+            : MotionPreset.move.duration,
+      ),
       controls: Padding(
         padding: const EdgeInsets.only(top: Insets.s4),
         child: _solved
-            ? _SolvedOverlay(moves: _board.moves, onAgain: _restart, onExit: () => leaveGame(context, ended: true))
+            ? GameOverStrip(
+                title: 'Solved in ${_board.moves}',
+                subtitle: 'Every tile home.',
+                primaryLabel: 'Shuffle again',
+                onPrimary: _restart,
+                secondaryLabel: 'Back',
+                onSecondary: () => leaveGame(context, ended: true),
+              )
             : Column(
                 children: [
                   Text('$_inPlace in place',
@@ -171,10 +185,18 @@ class _PlayFifteenScreenState extends ConsumerState<PlayFifteenScreen>
 }
 
 class _Board extends StatelessWidget {
-  const _Board({required this.board, required this.onTap, required this.solved});
+  const _Board({
+    required this.board,
+    required this.onTap,
+    required this.solved,
+    required this.slide,
+  });
   final FifteenBoard board;
   final ValueChanged<int> onTap;
   final bool solved;
+
+  /// Zero under reduce motion, which is what turns the slide into a jump cut.
+  final Duration slide;
 
   @override
   Widget build(BuildContext context) {
@@ -193,8 +215,8 @@ class _Board extends StatelessWidget {
               if (board.cells[i] != 0)
                 AnimatedPositioned(
                   key: ValueKey(board.cells[i]),
-                  duration: Motion.quick,
-                  curve: Motion.emphasis,
+                  duration: slide,
+                  curve: MotionPreset.move.curve,
                   left: (i % n) * (cell + gap),
                   top: (i ~/ n) * (cell + gap),
                   width: cell,
@@ -258,31 +280,3 @@ class _Tile extends StatelessWidget {
   }
 }
 
-class _SolvedOverlay extends StatelessWidget {
-  const _SolvedOverlay({required this.moves, required this.onAgain, required this.onExit});
-  final int moves;
-  final VoidCallback onAgain;
-  final VoidCallback onExit;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.tokens;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Solved in $moves',
-            style: DallyType.heading.copyWith(fontSize: 24, color: t.textPrimary)),
-        const SizedBox(height: 5),
-        Text('Every tile home.', style: DallyType.body.copyWith(fontSize: 13, color: t.textMuted)),
-        const Gap(Insets.s4),
-        Row(
-          children: [
-            Expanded(child: PrimaryPill(label: 'Shuffle again', onPressed: onAgain)),
-            const Gap.h(Insets.s2 + 2),
-            Expanded(child: PrimaryPill.secondary(label: 'Back', onPressed: onExit)),
-          ],
-        ),
-      ],
-    );
-  }
-}

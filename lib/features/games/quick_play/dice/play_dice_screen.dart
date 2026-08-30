@@ -88,7 +88,7 @@ class _PlayDiceScreenState extends ConsumerState<PlayDiceScreen>
     _rolls++;
     Sounds.play(ref, Sfx.diceRoll);
 
-    if (reduceMotionOf(context)) {
+    if (readReduceMotion(context, ref)) {
       setState(() {
         _values = values;
         _shown = values;

@@ -19,16 +19,25 @@ class SnakePainter extends CustomPainter {
     required this.style,
     required this.snakeColor,
     required this.foodColor,
-    required this.cellBg,
     required this.dead,
+    required this.progress,
+    required this.headPop,
   });
 
   final SnakeGame game;
   final SnakeStyle style;
   final Color snakeColor;
   final Color foodColor;
-  final Color cellBg;
   final bool dead;
+
+  /// How far through the current grid step we are, `0..1`. Each segment is
+  /// drawn between the cell it came from and the cell it is in, so the snake
+  /// slides instead of jumping a whole cell per tick. `1` is the discrete
+  /// render — what a stopped loop, a dead snake and reduce-motion all get.
+  final double progress;
+
+  /// Scale on the head for one `pop` beat after eating; 1 otherwise.
+  final double headPop;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -53,6 +62,20 @@ class SnakePainter extends CustomPainter {
     }
 
     Offset cellCenter(int index) => cellRect(index).center;
+
+    // Where segment [i] is drawn: between the cell it came from (its successor
+    // in the body, which it is following) and the cell it now occupies. A gap
+    // wider than one cell means the body wrapped the arena edge, and there is
+    // nothing sensible to slide across — snap instead.
+    Offset lead(int i) => cellCenter(game.snake[i]);
+    Offset from(int i) =>
+        cellCenter(game.snake[i + 1 < game.snake.length ? i + 1 : i]);
+    Offset drawnCentre(int i) {
+      if (progress >= 1) return lead(i);
+      final a = from(i), b = lead(i);
+      if ((b - a).distance > cell * 1.5) return b;
+      return Offset.lerp(a, b, progress)!;
+    }
 
     final snakePaint = Paint()..color = dead ? snakeColor.withValues(alpha: 0.6) : snakeColor;
     final foodPaint = Paint()..color = foodColor;
@@ -80,20 +103,27 @@ class SnakePainter extends CustomPainter {
     }
 
     if (style == SnakeStyle.ribbon) {
-      _paintRibbon(canvas, cellCenter, cell, snakePaint);
+      _paintRibbon(canvas, drawnCentre, cell, snakePaint);
     } else {
-      _paintSegments(canvas, cellRect, cell, snakePaint, foodPaint);
+      _paintSegments(canvas, drawnCentre, cell, snakePaint, foodPaint);
     }
   }
 
   /// Discrete cells: a chain rounded only at head & tail (classic) or sharp
-  /// squares (pixel).
-  void _paintSegments(Canvas canvas, Rect Function(int) cellRect, double cell,
+  /// squares (pixel). Each segment is centred on its interpolated position, so
+  /// the same code draws a mid-step slide and a settled board.
+  void _paintSegments(Canvas canvas, Offset Function(int) centreOf, double cell,
       Paint snakePaint, Paint foodPaint) {
+    final gap = switch (style) {
+      SnakeStyle.classic => cell * 0.09,
+      SnakeStyle.pixel => cell * 0.16,
+      SnakeStyle.ribbon => 0.0,
+    };
     for (var i = 0; i < game.snake.length; i++) {
-      final rect = cellRect(game.snake[i]);
       final isHead = i == 0;
       final isTail = i == game.snake.length - 1;
+      final side = (cell - gap) * (isHead ? headPop : 1);
+      final rect = Rect.fromCenter(center: centreOf(i), width: side, height: side);
       final radius = switch (style) {
         SnakeStyle.pixel => 0.0,
         SnakeStyle.classic => (isHead || isTail) ? cell * 0.36 : cell * 0.09,
@@ -108,7 +138,7 @@ class SnakePainter extends CustomPainter {
 
   /// Continuous smooth ribbon: one round-capped stroke through the segment
   /// centres, split where the body wraps the arena edge.
-  void _paintRibbon(Canvas canvas, Offset Function(int) center, double cell, Paint snakePaint) {
+  void _paintRibbon(Canvas canvas, Offset Function(int) centreOf, double cell, Paint snakePaint) {
     final stroke = Paint()
       ..color = snakePaint.color
       ..style = PaintingStyle.stroke
@@ -118,8 +148,8 @@ class SnakePainter extends CustomPainter {
     final path = Path();
     var started = false;
     Offset? prev;
-    for (final idx in game.snake) {
-      final c = center(idx);
+    for (var i = 0; i < game.snake.length; i++) {
+      final c = centreOf(i);
       if (!started || (prev != null && (c - prev).distance > cell * 1.5)) {
         path.moveTo(c.dx, c.dy);
         started = true;
@@ -130,13 +160,15 @@ class SnakePainter extends CustomPainter {
     }
     canvas.drawPath(path, stroke);
     if (dead && game.snake.isNotEmpty) {
-      final h = center(game.snake.first);
+      final h = centreOf(0);
       canvas.drawCircle(h, cell * 0.41, Paint()..color = foodColor);
     }
   }
 
   @override
   bool shouldRepaint(SnakePainter old) =>
+      old.progress != progress ||
+      old.headPop != headPop ||
       old.dead != dead ||
       old.style != style ||
       old.game.snake.length != game.snake.length ||

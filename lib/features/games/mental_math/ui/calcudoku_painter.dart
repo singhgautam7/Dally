@@ -20,7 +20,6 @@ class CalcudokuPainter extends CustomPainter {
     required this.border,
     required this.faint,
     required this.danger,
-    required this.surfaceAlt,
   });
 
   final CalcudokuPuzzle puzzle;
@@ -41,7 +40,6 @@ class CalcudokuPainter extends CustomPainter {
   final Color border;
   final Color faint;
   final Color danger;
-  final Color surfaceAlt;
 
   @override
   void paint(Canvas canvas, Size size) {

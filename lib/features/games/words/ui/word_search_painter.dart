@@ -16,7 +16,6 @@ class WordSearchPainter extends CustomPainter {
     required this.ink,
     required this.textMuted,
     required this.surface,
-    required this.surfaceAlt,
     required this.border,
     required this.accent,
     required this.onAccent,
@@ -31,7 +30,6 @@ class WordSearchPainter extends CustomPainter {
   final Color ink;
   final Color textMuted;
   final Color surface;
-  final Color surfaceAlt;
   final Color border;
   final Color accent;
   final Color onAccent;

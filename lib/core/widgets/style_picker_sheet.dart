@@ -9,6 +9,7 @@ import '../theme/theme_controller.dart';
 import '../theme/type_scale.dart';
 import 'pause_sheet.dart';
 import 'primary_pill.dart';
+import 'dally_sheet.dart';
 
 /// The selected style id for [gameId], falling back to the module's
 /// recommended/first option. One place resolves this, so a game never has to
@@ -39,17 +40,9 @@ Future<void> showStylePicker(
   required Widget Function(BuildContext context, String styleId) previewBuilder,
   String? scopeLine,
 }) {
-  final t = context.tokens;
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: t.surface,
-    barrierColor: Colors.black.withValues(alpha: 0.6),
+  return showDallySheet<void>(
+    context,
     isScrollControlled: true,
-    showDragHandle: true,
-    shape: RoundedRectangleBorder(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      side: BorderSide(color: t.border),
-    ),
     builder: (sheetContext) => _StylePickerBody(
       module: module,
       previewBuilder: previewBuilder,

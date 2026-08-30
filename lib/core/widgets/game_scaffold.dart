@@ -7,6 +7,7 @@ import '../theme/dally_tokens.dart';
 import '../theme/motion.dart';
 import '../theme/spacing.dart';
 import 'game_exit.dart';
+import 'primary_pill.dart';
 
 /// The shared game-screen chrome: a featherweight top row holding only the
 /// overflow (pause) button, a status-bar slot (chips, score cards, clock), a
@@ -92,19 +93,7 @@ class _GameScaffoldState extends ConsumerState<GameScaffold> {
           // Top bar — overflow only.
           Align(
             alignment: Alignment.centerRight,
-            child: Semantics(
-              button: true,
-              label: 'Pause',
-              child: InkResponse(
-                onTap: _openPause,
-                radius: 24,
-                child: SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: Icon(Icons.more_vert_rounded, color: t.textFaint, size: 20),
-                ),
-              ),
-            ),
+            child: OverflowButton(onTap: _openPause, semanticLabel: 'Pause'),
           ),
           const Gap(Insets.s1 + 2),
           widget.statusBar,

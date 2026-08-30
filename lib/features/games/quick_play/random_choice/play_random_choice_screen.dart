@@ -190,7 +190,7 @@ class _PlayRandomChoiceScreenState extends ConsumerState<PlayRandomChoiceScreen>
                     contentPadding:
                         const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(11),
+                      borderRadius: Radii.containerBR,
                       borderSide: BorderSide.none,
                     ),
                   ),

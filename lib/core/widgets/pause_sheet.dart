@@ -8,6 +8,8 @@ import '../theme/palettes.dart';
 import '../theme/spacing.dart';
 import '../theme/theme_controller.dart';
 import '../theme/type_scale.dart';
+import 'primary_pill.dart';
+import 'dally_sheet.dart';
 
 /// A single tappable row in the pause sheet, with a chevron and optional
 /// trailing content (a value, mini swatches).
@@ -72,23 +74,17 @@ Future<PauseResult?> showPauseSheet(
   VoidCallback? onHowToPlay,
   List<Widget> extraRows = const [],
 }) {
-  final t = context.tokens;
-  return showModalBottomSheet<PauseResult>(
-    context: context,
-    backgroundColor: t.surface,
-    barrierColor: Colors.black.withValues(alpha: 0.6),
+  return showDallySheet<PauseResult>(
+    context,
     isScrollControlled: true,
-    showDragHandle: true,
-    shape: RoundedRectangleBorder(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      // A hairline so the sheet reads as a distinct surface — essential on
-      // AMOLED, where its black fill matches the board behind it.
-      side: BorderSide(color: t.border),
-    ),
     builder: (sheetContext) {
       final t = sheetContext.tokens;
       return SafeArea(
-        child: Padding(
+        // The row list is open-ended — Snake adds three rows, Minesweeper two —
+        // and the sheet has to survive both a short phone and a large text
+        // scale. It scrolls rather than clipping "Resume" off the bottom.
+        child: SingleChildScrollView(
+          child: Padding(
           padding: const EdgeInsets.fromLTRB(Insets.s5, 0, Insets.s5, Insets.s5),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -150,8 +146,12 @@ Future<PauseResult?> showPauseSheet(
                 onTap: () => Navigator.of(sheetContext).pop(PauseResult.exit),
               ),
               const Gap(Insets.s4),
-              _ResumePill(onTap: () => Navigator.of(sheetContext).pop(PauseResult.resume)),
+              PrimaryPill(
+                label: 'Resume',
+                onPressed: () => Navigator.of(sheetContext).pop(PauseResult.resume),
+              ),
             ],
+          ),
           ),
         ),
       );
@@ -169,16 +169,8 @@ Future<bool> showExitConfirm(
   BuildContext context, {
   required bool progressSaved,
 }) async {
-  final t = context.tokens;
-  final result = await showModalBottomSheet<bool>(
-    context: context,
-    backgroundColor: t.surface,
-    barrierColor: Colors.black.withValues(alpha: 0.6),
-    showDragHandle: true,
-    shape: RoundedRectangleBorder(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      side: BorderSide(color: t.border),
-    ),
+  final result = await showDallySheet<bool>(
+    context,
     builder: (sheetContext) {
       final t = sheetContext.tokens;
       return SafeArea(
@@ -197,12 +189,15 @@ Future<bool> showExitConfirm(
                 style: DallyType.body.copyWith(fontSize: 13, color: t.textMuted),
               ),
               const Gap(Insets.s5),
-              _DangerPill(
+              PrimaryPill.danger(
                 label: 'Leave game',
-                onTap: () => Navigator.of(sheetContext).pop(true),
+                onPressed: () => Navigator.of(sheetContext).pop(true),
               ),
               const Gap(Insets.s2 + 2),
-              _StayPill(onTap: () => Navigator.of(sheetContext).pop(false)),
+              PrimaryPill.secondary(
+                label: 'Keep playing',
+                onPressed: () => Navigator.of(sheetContext).pop(false),
+              ),
             ],
           ),
         ),
@@ -212,56 +207,7 @@ Future<bool> showExitConfirm(
   return result ?? false;
 }
 
-class _DangerPill extends StatelessWidget {
-  const _DangerPill({required this.label, required this.onTap});
-  final String label;
-  final VoidCallback onTap;
 
-  @override
-  Widget build(BuildContext context) {
-    final t = context.tokens;
-    return Material(
-      color: t.danger,
-      shape: const RoundedRectangleBorder(borderRadius: Radii.pillBR),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Center(
-            child: Text(label,
-                style: DallyType.bodyStrong.copyWith(fontWeight: FontWeight.w600, color: t.onAccent)),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StayPill extends StatelessWidget {
-  const _StayPill({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.tokens;
-    return Material(
-      color: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: Radii.pillBR, side: BorderSide(color: t.border)),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Center(
-            child: Text('Keep playing',
-                style: DallyType.bodyStrong.copyWith(fontWeight: FontWeight.w500, color: t.textPrimary)),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _MiniSwatches extends ConsumerWidget {
   const _MiniSwatches();
@@ -287,27 +233,3 @@ class _MiniSwatches extends ConsumerWidget {
       );
 }
 
-class _ResumePill extends StatelessWidget {
-  const _ResumePill({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.tokens;
-    return Material(
-      color: t.accent,
-      shape: const RoundedRectangleBorder(borderRadius: Radii.pillBR),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Center(
-            child: Text('Resume',
-                style: DallyType.bodyStrong.copyWith(fontWeight: FontWeight.w600, color: t.onAccent)),
-          ),
-        ),
-      ),
-    );
-  }
-}

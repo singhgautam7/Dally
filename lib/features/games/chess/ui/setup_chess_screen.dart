@@ -38,7 +38,22 @@ class _SetupChessScreenState extends ConsumerState<SetupChessScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final canResume = ChessSave.load(ref.read(saveRepositoryProvider)) != null;
+    final save = ChessSave.load(ref.read(saveRepositoryProvider));
+
+    // "Continue" resumes the saved game under **its own** settings, not
+    // whatever the steppers happen to show. The save stores its time control,
+    // orientation and side precisely so it can be rebuilt; handing the play
+    // screen the freshly-picked config instead meant continuing a no-clock game
+    // "as Blitz", with the saved game's empty clocks — and an instant flag.
+    final resumeConfig = save == null
+        ? null
+        : ChessConfig(
+            time: save.time,
+            player1Side: save.p1White ? ChessSide.white : ChessSide.black,
+            flipEachTurn: save.flipEachTurn,
+            faceToFace: save.faceToFace,
+            legalDots: save.legalDots,
+          );
 
     return SetupScaffold(
       title: 'Chess',
@@ -89,11 +104,12 @@ class _SetupChessScreenState extends ConsumerState<SetupChessScreen> {
       ],
       onHowToPlay: () => openHowTo(context, ref,
           moduleId: widget.moduleId, subtitle: 'Chess · ${_config.label}'),
-      continueLabel: canResume ? 'Continue game' : null,
-      onContinue: canResume
-          ? () => context.push(Routes.gamePlay(widget.moduleId), extra: _config)
-          : null,
-      startLabel: canResume ? 'New game' : 'Start',
+      continueLabel: resumeConfig == null ? null : 'Continue game',
+      onContinue: resumeConfig == null
+          ? null
+          : () => context.push(Routes.gamePlay(widget.moduleId),
+              extra: resumeConfig),
+      startLabel: resumeConfig == null ? 'Start' : 'New game',
       onStart: () {
         ChessSave.clear(ref.read(saveRepositoryProvider));
         context.push(Routes.gamePlay(widget.moduleId), extra: _config);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/palette.dart';
 import '../theme/type_scale.dart';
+import '../theme/spacing.dart';
 
 /// The abstract palette card — bg, a surface panel with accent/ramp swatches, a
 /// danger dot and Aa + mono sample. It renders the *previewed* palette's own
@@ -28,7 +29,7 @@ class GenericPalettePreview extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: p.bg,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: Radii.containerBR,
           border: Border.all(
             color: selected ? p.accent : p.border,
             width: selected ? 2 : 1,
@@ -155,7 +156,7 @@ class GenericPalettePreview extends StatelessWidget {
     final child = Container(
       height: 7,
       width: width,
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(999)),
+      decoration: BoxDecoration(color: color, borderRadius: Radii.pillBR),
     );
     return flex != null ? Expanded(flex: flex, child: child) : child;
   }
@@ -164,7 +165,7 @@ class GenericPalettePreview extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(5, 2, 7, 2),
         decoration: BoxDecoration(
           color: p.surfaceAlt,
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: Radii.pillBR,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

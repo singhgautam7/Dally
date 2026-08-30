@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/dally_tokens.dart';
 import '../theme/type_scale.dart';
+import '../theme/spacing.dart';
 
 /// A quiet in-game stat pill: a leading [icon] or text [label], then a mono
 /// value. Used across boards for moves, timers, mines-left, length.
@@ -32,7 +33,7 @@ class BoardChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: t.surface,
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: Radii.pillBR,
           border: t.surfaceBorder,
         ),
         child: Row(

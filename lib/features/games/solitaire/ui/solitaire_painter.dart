@@ -30,6 +30,14 @@ CardStyle cardStyleFromId(String id) =>
 
 /// The fixed card-face palette (design §10: "face #EEEAE1, black suits #26241F,
 /// red suits #C1443B").
+///
+/// **A deliberate token exception**, and one of only three in the app — the
+/// others are Chess's two piece colours and `PlayerIdentity`'s four seats. A
+/// playing card whose face and suits followed the palette would stop being a
+/// playing card: "red suit" is a rule of the game, not a style choice, and a
+/// theme that recoloured it would make the board unreadable. These are the only
+/// literals allowed outside `core/theme/`; everything around them — the table,
+/// the slot outlines, the hairlines — still reads tokens.
 const Color kCardFace = Color(0xFFEEEAE1);
 const Color kCardInk = Color(0xFF26241F);
 const Color kCardRed = Color(0xFFC1443B);

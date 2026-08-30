@@ -9,15 +9,16 @@ import '../../../../core/game/how_to_launcher.dart';
 import '../../../../core/app_providers.dart';
 import '../../../../core/services/haptics.dart';
 import '../../../../core/theme/dally_tokens.dart';
+import '../../../../core/theme/motion.dart';
 import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/type_scale.dart';
 import '../../../../core/util/format.dart';
 import '../../../../core/util/game_clock.dart';
 import '../../../../core/widgets/circular_number_pad.dart';
 import '../../../../core/widgets/game_exit.dart';
+import '../../../../core/widgets/game_over_strip.dart';
 import '../../../../core/widgets/game_scaffold.dart';
 import '../../../../core/widgets/pause_sheet.dart';
-import '../../../../core/widgets/primary_pill.dart';
 import '../logic/sudoku.dart';
 import '../sudoku_config.dart';
 import 'sudoku_save.dart';
@@ -32,7 +33,21 @@ class PlaySudokuScreen extends ConsumerStatefulWidget {
 }
 
 class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
-    with WidgetsBindingObserver, GameClock {
+    with
+        WidgetsBindingObserver,
+        GameClock,
+        TickerProviderStateMixin<PlaySudokuScreen>,
+        MotionRunner<PlaySudokuScreen> {
+  @override
+  bool get motionReduced => _reduceMotion;
+  bool _reduceMotion = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reduceMotion = readReduceMotion(context, ref);
+  }
+
   List<int> _givens = List.filled(81, 0);
   List<int> _solution = List.filled(81, 0);
   List<int> _entries = List.filled(81, 0);
@@ -58,20 +73,40 @@ class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
       _loading = false;
       _clockBase = save.elapsed;
     } else {
-      // Generate off the first frame with a skeleton.
-      Future(() {
-        final puzzle = Sudoku(rng: math.Random()).generate(widget.config.difficulty);
-        if (!mounted) return;
-        setState(() {
-          _givens = puzzle.givens;
-          _solution = puzzle.solution;
-          _entries = List.filled(81, 0);
-          _pencils = List.generate(81, (_) => <int>[]);
-          _loading = false;
-        });
-        ref.read(statsRepositoryProvider).increment('${widget.moduleId}.played');
-      });
+      _generate();
     }
+    _recomputeConflicts();
+  }
+
+  void _newPuzzle() => setState(_generate);
+
+  /// Generates off the first frame, behind the skeleton. The draw comes from
+  /// the shared [randomProvider] so a seeded instance makes the puzzle
+  /// reproducible — a bare `math.Random()` here used to make the generator the
+  /// one source of randomness in the app a test could not pin.
+  void _generate() {
+    _loading = true;
+    _solved = false;
+    _selected = -1;
+    _undo.clear();
+    _clockBase = 0;
+    _startedAt = DateTime.now();
+    resetClock();
+    final rng = ref.read(randomProvider).asRandom;
+    Future(() {
+      final puzzle = Sudoku(rng: rng).generate(widget.config.difficulty);
+      if (!mounted) return;
+      setState(() {
+        _givens = puzzle.givens;
+        _solution = puzzle.solution;
+        _entries = List.filled(81, 0);
+        _pencils = List.generate(81, (_) => <int>[]);
+        _loading = false;
+      });
+      _recomputeConflicts();
+      _persist();
+      ref.read(statsRepositoryProvider).increment('${widget.moduleId}.played');
+    });
   }
 
   // Saved elapsed carries over as a base; the live clock counts from zero on top.
@@ -87,13 +122,17 @@ class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
   int _value(int i) => _givens[i] != 0 ? _givens[i] : _entries[i];
   bool _isGiven(int i) => _givens[i] != 0;
 
-  Set<int> get _conflicts {
+  /// Conflicting cells, recomputed when the grid changes rather than on every
+  /// build — it is an 81-cell scan, and the clock alone rebuilds once a second.
+  Set<int> _conflicts = const {};
+
+  void _recomputeConflicts() {
     final board = [for (var i = 0; i < 81; i++) _value(i)];
     final out = <int>{};
     for (var i = 0; i < 81; i++) {
       if (board[i] != 0 && Sudoku.conflicts(board, i).isNotEmpty) out.add(i);
     }
-    return out;
+    _conflicts = out;
   }
 
   Map<int, int> get _remaining {
@@ -132,6 +171,11 @@ class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
       }
     });
     Haptics.light(ref);
+    _recomputeConflicts();
+    // The digit that just landed either settles in or, if it clashes with a
+    // peer, shakes. The board never refuses the entry — Sudoku lets you be
+    // wrong — so this is feedback, not rejection.
+    play(_conflicts.contains(_selected) ? MotionPreset.shake : MotionPreset.settle);
     _persist();
     _checkSolved();
   }
@@ -143,6 +187,7 @@ class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
       _entries[_selected] = 0;
       _pencils[_selected].clear();
     });
+    _recomputeConflicts();
     _persist();
   }
 
@@ -153,6 +198,7 @@ class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
       _entries = s.entries;
       _pencils = s.pencils;
     });
+    _recomputeConflicts();
     _persist();
   }
 
@@ -162,6 +208,7 @@ class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
     }
     stopClock();
     setState(() => _solved = true);
+    play(MotionPreset.pop);
     Haptics.medium(ref);
     final stats = ref.read(statsRepositoryProvider);
     stats.recordBest('${widget.moduleId}.bestTime.${widget.config.difficulty.name}',
@@ -226,6 +273,7 @@ class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
       _startedAt = DateTime.now();
       _selected = -1;
     });
+    _recomputeConflicts();
     _clockBase = 0;
     resetClock();
     _persist();
@@ -246,7 +294,6 @@ class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
         board: const _BoardSkeleton(),
       );
     }
-    final conflicts = _conflicts;
     return GameScaffold(
       onOverflow: _openPause,
       ended: _solved,
@@ -260,14 +307,30 @@ class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
         entries: _entries,
         pencils: _pencils,
         selected: _selected,
-        conflicts: conflicts,
+        conflicts: _conflicts,
         solved: _solved,
+        // Which cell is animating, and how. Only the cell just played moves;
+        // completion pops the whole grid once.
+        active: _solved ? -1 : _selected,
+        activeScale:
+            motionPreset == MotionPreset.settle ? motionEased.popScale(peak: 1.18) : 1,
+        activeShake:
+            motionPreset == MotionPreset.shake ? motionEased.shakeOffset(amplitude: 4) : 0,
+        boardScale:
+            motionPreset == MotionPreset.pop ? motionEased.popScale(peak: 1.02) : 1,
         onSelect: (i) => setState(() => _selected = i),
       ),
       controls: Padding(
         padding: const EdgeInsets.only(top: Insets.s4),
         child: _solved
-            ? _SolvedOverlay(time: formatClock(_displaySeconds), onAgain: _restart, onExit: () => leaveGame(context, ended: true))
+            ? GameOverStrip(
+                title: 'Solved in ${formatClock(_displaySeconds)}',
+                subtitle: 'Every cell checks out.',
+                primaryLabel: 'New puzzle',
+                onPrimary: _newPuzzle,
+                secondaryLabel: 'Retry',
+                onSecondary: _restart,
+              )
             : CircularNumberPad(
                 remaining: _remaining,
                 onDigit: _input,
@@ -296,6 +359,10 @@ class _Board extends StatelessWidget {
     required this.selected,
     required this.conflicts,
     required this.solved,
+    required this.active,
+    required this.activeScale,
+    required this.activeShake,
+    required this.boardScale,
     required this.onSelect,
   });
 
@@ -305,6 +372,15 @@ class _Board extends StatelessWidget {
   final int selected;
   final Set<int> conflicts;
   final bool solved;
+
+  /// The cell currently animating, or -1.
+  final int active;
+  final double activeScale;
+  final double activeShake;
+
+  /// One gentle pop over the whole grid when the puzzle comes out.
+  final double boardScale;
+
   final ValueChanged<int> onSelect;
 
   int _value(int i) => givens[i] != 0 ? givens[i] : entries[i];
@@ -319,7 +395,9 @@ class _Board extends StatelessWidget {
         final cell = s / 9;
         return SizedBox.square(
           dimension: s,
-          child: Container(
+          child: Transform.scale(
+            scale: boardScale,
+            child: Container(
             decoration: BoxDecoration(
               border: Border.all(color: t.textMuted, width: 1.5),
               borderRadius: BorderRadius.circular(4),
@@ -344,10 +422,13 @@ class _Board extends StatelessWidget {
                       row: i ~/ 9,
                       col: i % 9,
                       tokens: t,
+                      digitScale: i == active ? activeScale : 1,
+                      digitShake: i == active ? activeShake : 0,
                       onTap: () => onSelect(i),
                     ),
                   ),
               ],
+            ),
             ),
           ),
         );
@@ -369,6 +450,8 @@ class _Cell extends StatelessWidget {
     required this.row,
     required this.col,
     required this.tokens,
+    required this.digitScale,
+    required this.digitShake,
     required this.onTap,
   });
 
@@ -383,6 +466,8 @@ class _Cell extends StatelessWidget {
   final int row;
   final int col;
   final DallyTokens tokens;
+  final double digitScale;
+  final double digitShake;
   final VoidCallback onTap;
 
   @override
@@ -417,12 +502,18 @@ class _Cell extends StatelessWidget {
         ),
         child: value != 0
             ? Center(
-                child: Text('$value',
-                    style: DallyType.monoLg.copyWith(
-                      fontSize: cell * 0.5,
-                      fontWeight: given ? FontWeight.w700 : FontWeight.w500,
-                      color: digitColor,
-                    )),
+                child: Transform.translate(
+                  offset: Offset(digitShake, 0),
+                  child: Transform.scale(
+                    scale: digitScale,
+                    child: Text('$value',
+                        style: DallyType.monoLg.copyWith(
+                          fontSize: cell * 0.5,
+                          fontWeight: given ? FontWeight.w700 : FontWeight.w500,
+                          color: digitColor,
+                        )),
+                  ),
+                ),
               )
             : pencil.isEmpty
                 ? null
@@ -474,31 +565,3 @@ class _BoardSkeleton extends StatelessWidget {
   }
 }
 
-class _SolvedOverlay extends StatelessWidget {
-  const _SolvedOverlay({required this.time, required this.onAgain, required this.onExit});
-  final String time;
-  final VoidCallback onAgain;
-  final VoidCallback onExit;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.tokens;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Solved in $time',
-            style: DallyType.heading.copyWith(fontSize: 24, color: t.textPrimary)),
-        const SizedBox(height: 5),
-        Text('Every cell checks out.', style: DallyType.body.copyWith(fontSize: 13, color: t.textMuted)),
-        const Gap(Insets.s4),
-        Row(
-          children: [
-            Expanded(child: PrimaryPill(label: 'New puzzle', onPressed: onExit)),
-            const Gap.h(Insets.s2 + 2),
-            Expanded(child: PrimaryPill.secondary(label: 'Retry', onPressed: onAgain)),
-          ],
-        ),
-      ],
-    );
-  }
-}

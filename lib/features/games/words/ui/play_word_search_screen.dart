@@ -187,7 +187,6 @@ class _PlayWordSearchScreenState extends ConsumerState<PlayWordSearchScreen>
                   ink: t.textPrimary,
                   textMuted: t.textMuted,
                   surface: t.surface,
-                  surfaceAlt: t.surfaceAlt,
                   border: t.border,
                   accent: t.accent,
                   onAccent: t.onAccent,

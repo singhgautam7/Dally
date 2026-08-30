@@ -3,12 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/game/game_module.dart';
 import '../../../../core/theme/dally_tokens.dart';
+import '../../../../core/theme/motion.dart';
 import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/type_scale.dart';
 import '../../../../core/widgets/how_to_play.dart';
 import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/widgets/pause_sheet.dart';
 import '../math_difficulty.dart';
+import '../../../../core/widgets/primary_pill.dart';
 
 /// A stat the drill has earned. Metrics are opt-in per game and never render a
 /// zero for something unearned — pass null and the cell shows "—".
@@ -100,19 +102,7 @@ class _MentalMathScaffoldState extends ConsumerState<MentalMathScaffold> {
                       ),
                     ],
                     const Spacer(),
-                    Semantics(
-                      button: true,
-                      label: 'More',
-                      child: InkResponse(
-                        onTap: () => _openSheet(context, ref),
-                        radius: 24,
-                        child: SizedBox(
-                          width: 40,
-                          height: 40,
-                          child: Icon(Icons.more_vert_rounded, color: t.textFaint, size: 20),
-                        ),
-                      ),
-                    ),
+                    OverflowButton(onTap: () => _openSheet(context, ref)),
                   ],
                 ),
                 const Gap(Insets.s3),
@@ -126,9 +116,12 @@ class _MentalMathScaffoldState extends ConsumerState<MentalMathScaffold> {
                   ),
                 ),
                 Expanded(child: Center(child: RepaintBoundary(child: widget.prompt))),
-                // The 140ms wash is the whole feedback vocabulary.
+                // One settle-length wash is the whole feedback vocabulary.
                 AnimatedContainer(
-                  duration: const Duration(milliseconds: 140),
+                  duration: reduceMotionEnabled(context, ref)
+                      ? Duration.zero
+                      : MotionPreset.settle.duration,
+                  curve: MotionPreset.settle.curve,
                   decoration: BoxDecoration(
                     color: widget.feedback?.withValues(alpha: 0.16) ?? Colors.transparent,
                     borderRadius: Radii.containerBR,

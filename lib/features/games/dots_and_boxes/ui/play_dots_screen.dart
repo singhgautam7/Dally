@@ -2,19 +2,22 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/game/how_to_launcher.dart';
+import '../../../../core/game/player_identity.dart';
 import '../../../../core/game/session_recorder.dart';
 import '../../../../core/services/haptics.dart';
 import '../../../../core/storage/game_session.dart';
 import '../../../../core/theme/dally_tokens.dart';
+import '../../../../core/theme/motion.dart';
 import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/type_scale.dart';
 import '../../../../core/util/game_clock.dart';
+import '../../../../core/widgets/game_exit.dart';
+import '../../../../core/widgets/game_over_strip.dart';
 import '../../../../core/widgets/game_scaffold.dart';
 import '../../../../core/widgets/pause_sheet.dart';
-import '../../../../core/widgets/primary_pill.dart';
+import '../../../../core/widgets/player_chip.dart';
 import '../dots_config.dart';
 import '../logic/dots_and_boxes.dart';
 import 'setup_dots_screen.dart' show lastLoserProvider;
@@ -33,17 +36,36 @@ class PlayDotsScreen extends ConsumerStatefulWidget {
 }
 
 class _PlayDotsScreenState extends ConsumerState<PlayDotsScreen>
-    with WidgetsBindingObserver, GameClock {
+    with WidgetsBindingObserver, GameClock, TickerProviderStateMixin, MotionRunner {
+  /// The two fixed seat identities. Coral and Cobalt — never a theme colour, so
+  /// "the red boxes are mine" survives a palette switch mid-game.
+  static final List<PlayerIdentity> _seats = identitiesFor(2);
+
+  bool _reduceMotion = false;
+
+  @override
+  bool get motionReduced => _reduceMotion;
+
   late DotsAndBoxesGame _game;
   late DateTime _startedAt;
   String _strip = '';
   bool _recorded = false;
+
+  /// Row-major indices of the boxes the *last* move closed. Only these settle;
+  /// scaling every claimed mark would re-pop the whole board on every claim.
+  Set<int> _justClaimed = const {};
 
   @override
   void initState() {
     super.initState();
     initClock();
     _reset();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reduceMotion = readReduceMotion(context, ref);
   }
 
   @override
@@ -56,6 +78,7 @@ class _PlayDotsScreenState extends ConsumerState<PlayDotsScreen>
     _game = DotsAndBoxesGame(size: widget.config.size, firstPlayer: widget.config.firstPlayer);
     _startedAt = DateTime.now();
     _recorded = false;
+    _justClaimed = const {};
     _strip = '${widget.config.nameOf(_game.currentPlayer)} starts';
     resetClock();
     startClock();
@@ -66,14 +89,16 @@ class _PlayDotsScreenState extends ConsumerState<PlayDotsScreen>
     final edge = painter.edgeAt(local);
     if (edge == null || !_game.isLegal(edge)) return;
     final mover = _game.currentPlayer;
+    final before = _ownedBoxes();
     final result = _game.play(edge);
     if (result == null) return;
 
     Haptics.selection(ref);
+    _justClaimed = _ownedBoxes().difference(before);
+    if (_justClaimed.isNotEmpty) play(MotionPreset.settle);
     setState(() {
       if (result.finished) {
         stopClock();
-        _strip = _resultLine();
         _record();
       } else if (result.claimed > 0) {
         final n = result.claimed == 1 ? 'One box' : 'Two boxes';
@@ -83,6 +108,12 @@ class _PlayDotsScreenState extends ConsumerState<PlayDotsScreen>
       }
     });
   }
+
+  Set<int> _ownedBoxes() => {
+        for (var r = 0; r < _game.size; r++)
+          for (var c = 0; c < _game.size; c++)
+            if (_game.ownerAt(r, c) != -1) r * _game.size + c,
+      };
 
   String _resultLine() {
     final w = _game.winner;
@@ -129,7 +160,7 @@ class _PlayDotsScreenState extends ConsumerState<PlayDotsScreen>
       case PauseResult.restart:
         setState(_reset);
       case PauseResult.exit:
-        if (mounted) context.pop();
+        await leaveGame(context, ended: _game.isFinished);
       case PauseResult.resume:
       case null:
         if (wasRunning && !_game.isFinished) startClock();
@@ -142,10 +173,11 @@ class _PlayDotsScreenState extends ConsumerState<PlayDotsScreen>
     return GameScaffold(
       onOverflow: _openPause,
       ended: _game.isFinished,
-      statusBar: _ScoreRow(
-        game: _game,
-        config: widget.config,
-        finished: _game.isFinished,
+      statusBar: PlayerStrip(
+        identities: _seats,
+        names: [widget.config.playerOne, widget.config.playerTwo],
+        activeIndex: _game.isFinished ? -1 : _game.currentPlayer,
+        valueOf: (i) => '${_game.scoreOf(i)}',
       ),
       board: LayoutBuilder(
         builder: (context, constraints) {
@@ -159,11 +191,12 @@ class _PlayDotsScreenState extends ConsumerState<PlayDotsScreen>
             game: _game,
             cell: cell,
             margin: outerMargin,
-            accent: t.accent,
+            identities: _seats,
             ink: t.textPrimary,
             border: t.border,
             claimMarks: widget.config.claimMarks,
-            textScale: (cell / 58).clamp(0.6, 1.2),
+            settling: _justClaimed,
+            settle: motionPreset == MotionPreset.settle ? motionEased : 1,
           );
           return GestureDetector(
             onTapUp: (d) => _tap(d.localPosition, painter),
@@ -179,17 +212,20 @@ class _PlayDotsScreenState extends ConsumerState<PlayDotsScreen>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Gap(Insets.s4),
-          Text(_strip,
-              textAlign: TextAlign.center,
-              style: DallyType.body.copyWith(
-                fontSize: 14,
-                color: _game.isFinished ? t.textPrimary : t.textMuted,
-              )),
+          if (!_game.isFinished)
+            Text(_strip,
+                textAlign: TextAlign.center,
+                style: DallyType.body.copyWith(fontSize: 14, color: t.textMuted)),
           if (_game.isFinished) ...[
             const Gap(Insets.s4),
-            PrimaryPill(label: 'Play again', onPressed: () => setState(_reset)),
-            const Gap(Insets.s2 + 2),
-            PrimaryPill.secondary(label: 'Back to games', onPressed: () => context.pop()),
+            GameOverStrip(
+              title: _resultLine(),
+              subtitle: 'Every box closed.',
+              primaryLabel: 'Play again',
+              onPrimary: () => setState(_reset),
+              secondaryLabel: 'Back to games',
+              onSecondary: () => leaveGame(context, ended: true),
+            ),
           ],
         ],
       ),
@@ -197,59 +233,3 @@ class _PlayDotsScreenState extends ConsumerState<PlayDotsScreen>
   }
 }
 
-/// The score row replaces the header: each player's dot, name and box count,
-/// the active player's dot in accent. It goes neutral when the game ends.
-class _ScoreRow extends StatelessWidget {
-  const _ScoreRow({required this.game, required this.config, required this.finished});
-
-  final DotsAndBoxesGame game;
-  final DotsConfig config;
-  final bool finished;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.tokens;
-    Widget side(int player) {
-      final active = !finished && game.currentPlayer == player;
-      return Expanded(
-        child: Row(
-          mainAxisAlignment:
-              player == 0 ? MainAxisAlignment.start : MainAxisAlignment.end,
-          children: [
-            if (player == 1) ...[
-              Text('${game.scoreOf(player)}',
-                  style: DallyType.monoChip.copyWith(fontSize: 17, color: t.textPrimary)),
-              const Gap.h(Insets.s2),
-            ],
-            Container(
-              width: 9,
-              height: 9,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: active ? t.accent : t.border,
-              ),
-            ),
-            const Gap.h(Insets.s2),
-            Flexible(
-              child: Text(config.nameOf(player),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: DallyType.body.copyWith(
-                    fontSize: 14,
-                    fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-                    color: active ? t.textPrimary : t.textMuted,
-                  )),
-            ),
-            if (player == 0) ...[
-              const Gap.h(Insets.s2),
-              Text('${game.scoreOf(player)}',
-                  style: DallyType.monoChip.copyWith(fontSize: 17, color: t.textPrimary)),
-            ],
-          ],
-        ),
-      );
-    }
-
-    return Row(children: [side(0), const Gap.h(Insets.s3), side(1)]);
-  }
-}

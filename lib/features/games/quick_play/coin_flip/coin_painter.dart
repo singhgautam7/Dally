@@ -26,6 +26,7 @@ class CoinPainter extends CustomPainter {
     required this.onAccent,
     required this.surface,
     required this.border,
+    required this.bg,
     required this.squash,
   });
 
@@ -35,6 +36,9 @@ class CoinPainter extends CustomPainter {
   final Color onAccent;
   final Color surface;
   final Color border;
+
+  /// The page behind the coin — the direction tails shades toward.
+  final Color bg;
   final double squash;
 
   @override
@@ -46,11 +50,11 @@ class CoinPainter extends CustomPainter {
     canvas.translate(-centre.dx, -centre.dy);
 
     final r = size.width / 2;
-    // Tails takes the darker stop of the accent so the two faces are legible
-    // apart without introducing a second hue.
-    final fill = face == CoinFace.heads
-        ? accent
-        : Color.lerp(accent, const Color(0xFF000000), 0.28)!;
+    // Tails takes a darker stop of the accent so the two faces are legible
+    // apart without introducing a second hue. It shades toward the *page*, not
+    // toward literal black: on a light palette black was the wrong direction,
+    // and on AMOLED the darkened rim vanished into the screen behind it.
+    final fill = face == CoinFace.heads ? accent : Color.lerp(accent, bg, 0.28)!;
 
     switch (style) {
       case CoinStyle.classic:
@@ -169,6 +173,7 @@ class CoinChip extends StatelessWidget {
           onAccent: t.onAccent,
           surface: t.surface,
           border: t.border,
+          bg: t.bg,
           squash: squash,
         ),
       ),

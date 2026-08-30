@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/theme/type_scale.dart';
+import '../../../../core/game/player_identity.dart';
 import '../logic/dots_and_boxes.dart';
 
 /// The whole board in one painter — dots, hairlines, drawn lines and claimed
@@ -8,30 +8,46 @@ import '../logic/dots_and_boxes.dart';
 ///
 /// The trick that keeps the board readable in every palette: an undrawn edge is
 /// a 1px hairline and a **drawn edge is the same geometry at 2.4px in the text
-/// colour**. The board stays monochrome, so the accent is free to mean turn and
-/// ownership and nothing else.
+/// colour**. The board stays monochrome, so the two seat colours are free to
+/// mean ownership and nothing else.
+///
+/// Ownership comes from [identities], the shared seat palette — fixed hues that
+/// do not follow the theme, each with its own shape. The shape is why the mark
+/// inside a claimed box is a circle or a triangle rather than an "A" or a "B":
+/// tint alone collapses on the light palettes, and initials collapse the moment
+/// both players' names start with the same letter.
 class DotsPainter extends CustomPainter {
   DotsPainter({
     required this.game,
     required this.cell,
     required this.margin,
-    required this.accent,
+    required this.identities,
     required this.ink,
     required this.border,
     required this.claimMarks,
-    required this.textScale,
+    required this.settling,
+    required this.settle,
   });
 
   final DotsAndBoxesGame game;
   final double cell;
   final double margin;
 
-  /// Player 1's colour; player 2 uses [ink]. Never a second hue.
-  final Color accent;
+  /// The two seats, in player order. Never a theme colour.
+  final List<PlayerIdentity> identities;
+
   final Color ink;
   final Color border;
   final bool claimMarks;
-  final double textScale;
+
+  /// Row-major indices of the boxes claimed by the last move — the only ones
+  /// [settle] applies to.
+  final Set<int> settling;
+
+  /// `0..1` progress of that settle; 1 when nothing is animating. It drives the
+  /// mark's scale only — the tint lands immediately, because ownership is state
+  /// rather than decoration.
+  final double settle;
 
   /// Edges inset this much at each end so they never touch the dots.
   static const double _inset = 4;
@@ -56,14 +72,15 @@ class DotsPainter extends CustomPainter {
       for (var c = 0; c < game.size; c++) {
         final owner = game.ownerAt(r, c);
         if (owner == -1) continue;
-        final colour = owner == 0 ? accent : ink;
+        final identity = identities[owner];
         final topLeft = _dot(r, c);
         canvas.drawRect(
           Rect.fromLTWH(topLeft.dx, topLeft.dy, cell, cell),
-          Paint()..color = colour.withValues(alpha: owner == 0 ? 0.16 : 0.10),
+          Paint()..color = identity.color.withValues(alpha: 0.16),
         );
         if (claimMarks) {
-          _initial(canvas, topLeft + Offset(cell / 2, cell / 2), owner == 0 ? 'A' : 'B', colour);
+          final scale = settling.contains(r * game.size + c) ? settle : 1.0;
+          _mark(canvas, topLeft + Offset(cell / 2, cell / 2), identity, scale);
         }
       }
     }
@@ -97,20 +114,18 @@ class DotsPainter extends CustomPainter {
     }
   }
 
-  /// The owner's initial. Not decoration — the tint alone fails Paper, Meadow
-  /// and Blush, where the two players' tints sit close together.
-  void _initial(Canvas canvas, Offset centre, String letter, Color colour) {
-    final tp = TextPainter(
-      text: TextSpan(
-        text: letter,
-        style: DallyType.monoChip.copyWith(
-          fontSize: 17 * textScale,
-          color: colour.withValues(alpha: 0.75),
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    tp.paint(canvas, centre - Offset(tp.width / 2, tp.height / 2));
+  /// The owner's seat shape. Not decoration — the tint alone fails Paper,
+  /// Meadow and Blush, where the two players' tints sit close together, and it
+  /// fails entirely in greyscale.
+  void _mark(Canvas canvas, Offset centre, PlayerIdentity identity, double scale) {
+    final radius = cell * 0.17 * scale;
+    if (radius <= 0) return;
+    canvas.drawPath(
+      playerShapePath(identity.shape, centre, radius),
+      Paint()
+        ..color = identity.color.withValues(alpha: 0.75)
+        ..isAntiAlias = true,
+    );
   }
 
   /// The edge nearest [point], or null when the tap is closer to no edge than

@@ -10,6 +10,7 @@ import '../../../../core/widgets/segmented_selector.dart';
 import '../../../../core/widgets/setup_scaffold.dart';
 import '../memory_config.dart';
 import 'memory_symbols.dart';
+import '../../../../core/theme/spacing.dart';
 
 /// Grid presets: (cols, rows).
 const _sizes = [
@@ -87,7 +88,7 @@ class _Preview extends StatelessWidget {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: t.surface,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: Radii.containerBR,
                   border: Border.all(color: t.border),
                 ),
                 child: faces.containsKey(i)

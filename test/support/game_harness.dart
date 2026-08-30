@@ -22,8 +22,9 @@ Future<void> pumpGameScreen(
   int seed = 1,
   Size size = const Size(360, 640),
   String paletteId = 'ink',
+  Map<String, Object> prefs = const {},
 }) async {
-  SharedPreferences.setMockInitialValues({});
+  SharedPreferences.setMockInitialValues(prefs);
   final store = await KeyValueStore.open();
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;

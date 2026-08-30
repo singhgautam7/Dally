@@ -15,9 +15,9 @@ import '../../../../core/theme/type_scale.dart';
 import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/widgets/game_scaffold.dart';
 import '../../../../core/widgets/pause_sheet.dart';
-import '../../../../core/widgets/primary_pill.dart';
 import '../logic/tic_tac_toe_game.dart';
 import '../tic_tac_toe_config.dart';
+import '../../../../core/widgets/game_over_strip.dart';
 
 class PlayTicTacToeScreen extends ConsumerStatefulWidget {
   const PlayTicTacToeScreen({super.key, required this.moduleId, required this.config});
@@ -29,13 +29,19 @@ class PlayTicTacToeScreen extends ConsumerStatefulWidget {
 }
 
 class _PlayTicTacToeScreenState extends ConsumerState<PlayTicTacToeScreen>
-    with SingleTickerProviderStateMixin {
+    with
+        TickerProviderStateMixin<PlayTicTacToeScreen>,
+        MotionRunner<PlayTicTacToeScreen> {
   late TicTacToeGame _game;
   late int _nextFirst;
   int _score1 = 0, _score2 = 0;
 
-  late final AnimationController _lineCtrl =
-      AnimationController(vsync: this, duration: Motion.medium);
+  /// The cell whose mark is still settling in, or -1.
+  int _placed = -1;
+
+  @override
+  bool get motionReduced => _reduceMotion;
+  bool _reduceMotion = false;
 
   @override
   void initState() {
@@ -45,9 +51,9 @@ class _PlayTicTacToeScreenState extends ConsumerState<PlayTicTacToeScreen>
   }
 
   @override
-  void dispose() {
-    _lineCtrl.dispose();
-    super.dispose();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reduceMotion = readReduceMotion(context, ref);
   }
 
   void _newRound({bool record = true}) {
@@ -57,7 +63,7 @@ class _PlayTicTacToeScreenState extends ConsumerState<PlayTicTacToeScreen>
       firstPlayer: _nextFirst,
     );
     _nextFirst = _nextFirst == Ttt.x ? Ttt.o : Ttt.x; // alternate next time
-    _lineCtrl.reset();
+    _placed = -1;
     if (record) ref.read(statsRepositoryProvider).increment('${widget.moduleId}.played');
     setState(() {});
   }
@@ -68,11 +74,13 @@ class _PlayTicTacToeScreenState extends ConsumerState<PlayTicTacToeScreen>
     if (_game.result != null) return;
     if (!_game.play(index)) return;
     Haptics.light(ref);
+    _placed = index;
     final res = _game.result;
     if (res != null) {
       _onResult(res);
     } else {
-      setState(() {});
+      // The mark settles in rather than appearing; `play` rebuilds for us.
+      play(MotionPreset.pop);
     }
   }
 
@@ -103,7 +111,7 @@ class _PlayTicTacToeScreenState extends ConsumerState<PlayTicTacToeScreen>
     );
     _startedAt = DateTime.now();
     setState(() {});
-    if (res.line.isNotEmpty) _lineCtrl.forward(from: 0);
+    if (res.line.isNotEmpty) play(MotionPreset.move);
   }
 
   void _resetScore() => setState(() {
@@ -153,7 +161,12 @@ class _PlayTicTacToeScreenState extends ConsumerState<PlayTicTacToeScreen>
       board: _Board(
         game: _game,
         onTap: _tap,
-        lineAnimation: _lineCtrl,
+        // The win line draws itself in on `move`; a placed mark settles on
+        // `pop`. Both are 1 the instant nothing is running, which is also what
+        // reduce motion collapses them to.
+        lineProgress: motionPreset == MotionPreset.move ? motionEased : 1,
+        placed: _placed,
+        placedPop: motionPreset == MotionPreset.pop ? motionEased.popScale() : 1,
       ),
       controls: Padding(
         padding: const EdgeInsets.only(top: Insets.s4),
@@ -169,10 +182,18 @@ class _PlayTicTacToeScreenState extends ConsumerState<PlayTicTacToeScreen>
                       style: DallyType.body.copyWith(fontSize: 12, color: t.textFaint)),
                 ],
               )
-            : _ResultOverlay(
-                result: res,
-                onAgain: () => _newRound(),
-                onResetScore: _resetScore,
+            : GameOverStrip(
+                title: switch (res.winner) {
+                  Ttt.x => 'Player 1 takes it',
+                  Ttt.o => 'Player 2 takes it',
+                  _ => 'A draw',
+                },
+                subtitle:
+                    res.winner == 0 ? 'Nobody blinked.' : 'Line drawn through.',
+                primaryLabel: 'Play again',
+                onPrimary: _newRound,
+                secondaryLabel: 'Reset score',
+                onSecondary: _resetScore,
               ),
       ),
     );
@@ -198,11 +219,20 @@ class _ScoreHeader extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _col('$score1', 'Player 1 · X', active: !finished && current == Ttt.x, color: t.accent, t: t),
+        // Flexible, not fixed: the two labels plus their gaps are wider than a
+        // 320px phone's content column, and an unconstrained Row overflowed by
+        // 47px there rather than tightening.
+        Flexible(
+          child: _col('$score1', 'Player 1 · X',
+              active: !finished && current == Ttt.x, color: t.accent, t: t),
+        ),
         const Gap.h(Insets.s5),
         Text('—', style: DallyType.monoSm.copyWith(color: t.textFaint)),
         const Gap.h(Insets.s5),
-        _col('$score2', 'Player 2 · O', active: !finished && current == Ttt.o, color: t.textPrimary, t: t),
+        Flexible(
+          child: _col('$score2', 'Player 2 · O',
+              active: !finished && current == Ttt.o, color: t.textPrimary, t: t),
+        ),
       ],
     );
   }
@@ -213,17 +243,28 @@ class _ScoreHeader extends StatelessWidget {
       children: [
         Text(score, style: DallyType.monoLg.copyWith(fontSize: 22, color: c)),
         const SizedBox(height: 4),
-        Text(label, style: DallyType.body.copyWith(fontSize: 11, color: c)),
+        Text(label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: DallyType.body.copyWith(fontSize: 11, color: c)),
       ],
     );
   }
 }
 
 class _Board extends StatelessWidget {
-  const _Board({required this.game, required this.onTap, required this.lineAnimation});
+  const _Board({
+    required this.game,
+    required this.onTap,
+    required this.lineProgress,
+    required this.placed,
+    required this.placedPop,
+  });
   final TicTacToeGame game;
   final ValueChanged<int> onTap;
-  final Animation<double> lineAnimation;
+  final double lineProgress;
+  final int placed;
+  final double placedPop;
 
   @override
   Widget build(BuildContext context) {
@@ -248,23 +289,21 @@ class _Board extends StatelessWidget {
                   mark: game.cells[i],
                   cell: cell,
                   tokens: t,
+                  scale: i == placed ? placedPop : 1,
                   onTap: () => onTap(i),
                 ),
               ),
             if (game.result?.line.isNotEmpty ?? false)
               Positioned.fill(
                 child: IgnorePointer(
-                  child: AnimatedBuilder(
-                    animation: lineAnimation,
-                    builder: (context, _) => CustomPaint(
-                      painter: _WinLinePainter(
-                        line: game.result!.line,
-                        size: n,
-                        cell: cell,
-                        gap: gap,
-                        color: game.result!.winner == Ttt.x ? t.accent : t.textPrimary,
-                        progress: lineAnimation.value,
-                      ),
+                  child: CustomPaint(
+                    painter: _WinLinePainter(
+                      line: game.result!.line,
+                      size: n,
+                      cell: cell,
+                      gap: gap,
+                      color: game.result!.winner == Ttt.x ? t.accent : t.textPrimary,
+                      progress: lineProgress,
                     ),
                   ),
                 ),
@@ -278,10 +317,17 @@ class _Board extends StatelessWidget {
 }
 
 class _Cell extends StatelessWidget {
-  const _Cell({required this.mark, required this.cell, required this.tokens, required this.onTap});
+  const _Cell({
+    required this.mark,
+    required this.cell,
+    required this.tokens,
+    required this.scale,
+    required this.onTap,
+  });
   final int mark;
   final double cell;
   final DallyTokens tokens;
+  final double scale;
   final VoidCallback onTap;
 
   @override
@@ -300,10 +346,13 @@ class _Cell extends StatelessWidget {
           ),
           child: mark == Ttt.empty
               ? null
-              : CustomPaint(
-                  painter: _MarkPainter(
-                    isX: mark == Ttt.x,
-                    color: mark == Ttt.x ? t.accent : t.textPrimary,
+              : Transform.scale(
+                  scale: scale,
+                  child: CustomPaint(
+                    painter: _MarkPainter(
+                      isX: mark == Ttt.x,
+                      color: mark == Ttt.x ? t.accent : t.textPrimary,
+                    ),
                   ),
                 ),
         ),
@@ -374,36 +423,3 @@ class _WinLinePainter extends CustomPainter {
   bool shouldRepaint(_WinLinePainter old) => old.progress != progress || old.line != line;
 }
 
-class _ResultOverlay extends StatelessWidget {
-  const _ResultOverlay({required this.result, required this.onAgain, required this.onResetScore});
-  final TttResult result;
-  final VoidCallback onAgain;
-  final VoidCallback onResetScore;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.tokens;
-    final title = result.winner == Ttt.x
-        ? 'Player 1 takes it'
-        : result.winner == Ttt.o
-            ? 'Player 2 takes it'
-            : 'A draw';
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: DallyType.heading.copyWith(fontSize: 24, color: t.textPrimary)),
-        const SizedBox(height: 5),
-        Text(result.winner == 0 ? 'Nobody blinked.' : 'Line drawn through.',
-            style: DallyType.body.copyWith(fontSize: 13, color: t.textMuted)),
-        const Gap(Insets.s4),
-        Row(
-          children: [
-            Expanded(child: PrimaryPill(label: 'Play again', onPressed: onAgain)),
-            const Gap.h(Insets.s2 + 2),
-            Expanded(child: PrimaryPill.secondary(label: 'Reset score', onPressed: onResetScore)),
-          ],
-        ),
-      ],
-    );
-  }
-}

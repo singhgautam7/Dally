@@ -101,7 +101,7 @@ class _PlayRandomNumberScreenState extends ConsumerState<PlayRandomNumberScreen>
       _value = result.$2;
     });
     Haptics.light(ref);
-    if (reduceMotionOf(context)) {
+    if (readReduceMotion(context, ref)) {
       _countUp.value = 1;
     } else {
       _countUp.forward(from: 0);
@@ -271,11 +271,11 @@ class _BoundField extends StatelessWidget {
             fillColor: t.surfaceAlt,
             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(11),
+              borderRadius: Radii.containerBR,
               borderSide: BorderSide.none,
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(11),
+              borderRadius: Radii.containerBR,
               borderSide: invalid ? BorderSide(color: t.danger) : BorderSide.none,
             ),
           ),

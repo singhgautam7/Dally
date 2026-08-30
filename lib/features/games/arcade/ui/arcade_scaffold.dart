@@ -9,6 +9,7 @@ import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/widgets/how_to_play.dart';
 import '../../../../core/widgets/pause_sheet.dart';
 import '../../../../core/widgets/style_picker_sheet.dart';
+import '../../../../core/widgets/primary_pill.dart';
 
 /// The shared Tiny Arcade shell.
 ///
@@ -92,22 +93,10 @@ class _ArcadeScaffoldState extends ConsumerState<ArcadeScaffold> {
                     Text(widget.score,
                         style: DallyType.monoLg.copyWith(fontSize: 22, color: t.textPrimary)),
                     const Spacer(),
-                    Semantics(
-                      button: true,
-                      label: 'More',
-                      child: InkResponse(
-                        onTap: () {
-                          widget.onPause();
-                          _openSheet(context, ref);
-                        },
-                        radius: 24,
-                        child: SizedBox(
-                          width: 40,
-                          height: 40,
-                          child: Icon(Icons.more_vert_rounded, color: t.textFaint, size: 20),
-                        ),
-                      ),
-                    ),
+                    OverflowButton(onTap: () {
+                      widget.onPause();
+                      _openSheet(context, ref);
+                    }),
                   ],
                 ),
                 const Gap(Insets.s2),

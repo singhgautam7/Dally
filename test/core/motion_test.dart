@@ -100,6 +100,34 @@ void main() {
       await tester.pumpAndSettle();
     });
 
+    testWidgets('a theme switch mid-run repaints without resetting it',
+        (tester) async {
+      final seen = <double>[];
+      final key = GlobalKey<_MotionHostState>();
+
+      Widget host(Color colour) => Theme(
+            data: ThemeData(scaffoldBackgroundColor: colour),
+            child: _MotionHost(key: key, reduced: false, onFrame: seen.add),
+          );
+
+      await tester.pumpWidget(host(const Color(0xFF000000)));
+      key.currentState!.play(MotionPreset.move);
+      await tester.pump();
+      await tester.pump(MotionPreset.move.duration ~/ 2);
+      final mid = seen.last;
+      expect(mid, greaterThan(0));
+
+      // Nothing in the motion layer reads a colour, so a palette change is a
+      // repaint and nothing more: the run keeps its place instead of starting
+      // over, which is what would make a mid-game theme switch feel broken.
+      await tester.pumpWidget(host(const Color(0xFFFFFFFF)));
+      await tester.pump();
+      expect(seen.last, greaterThanOrEqualTo(mid));
+      expect(key.currentState!.motionPreset, MotionPreset.move);
+      await tester.pumpAndSettle();
+      expect(key.currentState!.motionEased, 1.0);
+    });
+
     testWidgets('disposal leaves no live ticker', (tester) async {
       final key = GlobalKey<_MotionHostState>();
       await tester.pumpWidget(

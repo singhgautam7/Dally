@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../theme/dally_tokens.dart';
 import '../theme/motion.dart';
 import '../theme/type_scale.dart';
+import '../theme/spacing.dart';
 
 /// A labelled on/off row: title + optional subtitle on the left, a pill switch
 /// on the right. On = accent track with an onAccent knob; off = surfaceAlt track
@@ -57,29 +59,31 @@ class DallyToggle extends StatelessWidget {
   }
 }
 
-class _Switch extends StatelessWidget {
+class _Switch extends ConsumerWidget {
   const _Switch({required this.value, required this.tokens});
   final bool value;
   final DallyTokens tokens;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final t = tokens;
-    final reduce = reduceMotionOf(context);
+    // Both sources, not just the OS flag — otherwise the Reduce motion toggle
+    // is the one control in the app that ignores itself.
+    final reduce = reduceMotionEnabled(context, ref);
     return AnimatedContainer(
-      duration: reduce ? Duration.zero : Motion.quick,
-      curve: Motion.curve,
+      duration: reduce ? Duration.zero : MotionPreset.settle.duration,
+      curve: MotionPreset.settle.curve,
       width: 48,
       height: 28,
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
         color: value ? t.accent : t.surfaceAlt,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: Radii.pillBR,
         border: value ? null : Border.all(color: t.border),
       ),
       child: AnimatedAlign(
-        duration: reduce ? Duration.zero : Motion.quick,
-        curve: Motion.curve,
+        duration: reduce ? Duration.zero : MotionPreset.settle.duration,
+        curve: MotionPreset.settle.curve,
         alignment: value ? Alignment.centerRight : Alignment.centerLeft,
         child: Container(
           width: value ? 22 : 20,

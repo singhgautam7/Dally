@@ -10,8 +10,6 @@ dependencies:
   flutter:
     sdk: flutter
 
-  cupertino_icons: 1.0.9
-
   # State management (3.3.x is the latest line compatible with Dart 3.11)
   flutter_riverpod: 3.3.2
   # Routing
@@ -51,7 +49,6 @@ flutter:
   assets:
     - assets/glyphs/
     - assets/sfx/
-    - assets/styles/
     - assets/words/
 
   fonts:

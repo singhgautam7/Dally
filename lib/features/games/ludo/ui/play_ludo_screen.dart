@@ -416,7 +416,6 @@ class _PlayLudoScreenState extends ConsumerState<PlayLudoScreen>
                     painter: LudoPainter(
                       game: _game,
                       identities: _seats,
-                      ink: t.textPrimary,
                       border: t.border,
                       surface: t.surface,
                       surfaceAlt: t.surfaceAlt,

@@ -17,7 +17,6 @@ class LudoPainter extends CustomPainter {
   LudoPainter({
     required this.game,
     required this.identities,
-    required this.ink,
     required this.border,
     required this.surface,
     required this.surfaceAlt,
@@ -33,7 +32,6 @@ class LudoPainter extends CustomPainter {
 
   final LudoGame game;
   final List<PlayerIdentity> identities;
-  final Color ink;
   final Color border;
   final Color surface;
   final Color surfaceAlt;

@@ -22,13 +22,13 @@ import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/widgets/game_scaffold.dart';
 import '../../../../core/widgets/pause_sheet.dart';
 import '../../../../core/widgets/style_picker_sheet.dart';
-import '../../../../core/widgets/primary_pill.dart';
 import '../../../../core/widgets/round_action_button.dart';
 import '../logic/minesweeper_board.dart';
 import '../minesweeper_config.dart';
 import 'minesweeper_painter.dart';
 import 'minesweeper_pause_extras.dart';
 import 'minesweeper_save.dart';
+import '../../../../core/widgets/game_over_strip.dart';
 
 class PlayMinesweeperScreen extends ConsumerStatefulWidget {
   const PlayMinesweeperScreen({super.key, required this.moduleId, required this.config});
@@ -80,7 +80,11 @@ class _PlayMinesweeperScreenState extends ConsumerState<PlayMinesweeperScreen>
     super.initState();
     initClock();
     _board = MinesweeperBoard(
-        width: _c.width, height: _c.height, mineCount: _c.mines, guessFree: _c.guessFree);
+        width: _c.width,
+        height: _c.height,
+        mineCount: _c.mines,
+        guessFree: _c.guessFree,
+        rng: ref.read(randomProvider).asRandom);
     final save = MinesweeperSave.load(ref.read(saveRepositoryProvider));
     if (save != null && save.config.statKey == _c.statKey) {
       _board.restore(mines: save.mineMap, revealed: save.revealed, flags: save.flagged);
@@ -204,7 +208,11 @@ class _PlayMinesweeperScreenState extends ConsumerState<PlayMinesweeperScreen>
   void _restart() {
     setState(() {
       _board = MinesweeperBoard(
-          width: _c.width, height: _c.height, mineCount: _c.mines, guessFree: _c.guessFree);
+          width: _c.width,
+          height: _c.height,
+          mineCount: _c.mines,
+          guessFree: _c.guessFree,
+          rng: ref.read(randomProvider).asRandom);
       _gameOver = false;
       _won = false;
       _explodedIndex = -1;
@@ -294,11 +302,14 @@ class _PlayMinesweeperScreenState extends ConsumerState<PlayMinesweeperScreen>
       controls: Padding(
         padding: const EdgeInsets.only(top: Insets.s4),
         child: finished
-            ? _EndOverlay(
-                won: _won,
-                time: formatClock(_displaySeconds),
-                onAgain: _restart,
-                onExit: () => leaveGame(context, ended: true),
+            ? GameOverStrip(
+                title: _won ? 'Swept in ${formatClock(_displaySeconds)}' : 'Boom.',
+                titleColor: _won ? null : t.danger,
+                subtitle: _won ? 'Every safe cell open.' : 'Stepped on a mine.',
+                primaryLabel: 'Again',
+                onPrimary: _restart,
+                secondaryLabel: 'Change level',
+                onSecondary: () => leaveGame(context, ended: true),
               )
             : Row(
                 children: [
@@ -415,33 +426,3 @@ class _BoardView extends StatelessWidget {
   }
 }
 
-class _EndOverlay extends StatelessWidget {
-  const _EndOverlay({required this.won, required this.time, required this.onAgain, required this.onExit});
-  final bool won;
-  final String time;
-  final VoidCallback onAgain;
-  final VoidCallback onExit;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.tokens;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(won ? 'Swept in $time' : 'Boom.',
-            style: DallyType.heading.copyWith(fontSize: 24, color: won ? t.textPrimary : t.danger)),
-        const SizedBox(height: 5),
-        Text(won ? 'Every safe cell open.' : 'Stepped on a mine.',
-            style: DallyType.body.copyWith(fontSize: 13, color: t.textMuted)),
-        const Gap(Insets.s4),
-        Row(
-          children: [
-            Expanded(child: PrimaryPill(label: 'Again', onPressed: onAgain)),
-            const Gap.h(Insets.s2 + 2),
-            Expanded(child: PrimaryPill.secondary(label: 'Change level', onPressed: onExit)),
-          ],
-        ),
-      ],
-    );
-  }
-}

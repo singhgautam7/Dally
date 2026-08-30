@@ -109,7 +109,7 @@ class _ChipRow<T> extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: on ? t.accent : Colors.transparent,
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: Radii.pillBR,
             border: on ? null : Border.all(color: t.border),
           ),
           child: Text(labelOf(v),
