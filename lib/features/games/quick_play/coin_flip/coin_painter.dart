@@ -140,11 +140,21 @@ class CoinPainter extends CustomPainter {
 
 /// A small static coin for the style picker and the batch grid.
 class CoinChip extends StatelessWidget {
-  const CoinChip({super.key, required this.face, required this.style, this.size = 44});
+  const CoinChip({
+    super.key,
+    required this.face,
+    required this.style,
+    this.size = 44,
+    this.squash = 1,
+  });
 
   final CoinFace face;
   final CoinStyle style;
   final double size;
+
+  /// Vertical scale, 1 at rest. Every coin in a batch flips through the same
+  /// squash the single coin does; only the timing is staggered.
+  final double squash;
 
   @override
   Widget build(BuildContext context) {
@@ -159,7 +169,7 @@ class CoinChip extends StatelessWidget {
           onAccent: t.onAccent,
           surface: t.surface,
           border: t.border,
-          squash: 1,
+          squash: squash,
         ),
       ),
     );

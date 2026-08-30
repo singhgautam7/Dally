@@ -1,6 +1,5 @@
 import 'package:dally/features/games/words/logic/word_list.dart';
 import 'package:dally/features/games/words/ui/play_anagrams_screen.dart';
-import 'package:dally/features/games/words/ui/play_word_guess_screen.dart';
 import 'package:dally/features/games/words/ui/play_word_search_screen.dart';
 import 'package:dally/features/games/words/words_config.dart';
 import 'package:flutter/material.dart';
@@ -16,19 +15,6 @@ void main() {
     await pumpGameScreen(tester, screen, size: size ?? const Size(360, 640));
     await tester.pumpAndSettle();
   }
-
-  testWidgets('Word Guess lays out and takes a guess', (tester) async {
-    await pump(
-        tester,
-        const PlayWordGuessScreen(moduleId: 'word_guess', config: config),
-        size: const Size(320, 640));
-    expect(tester.takeException(), isNull);
-    expect(find.text('Q'), findsOneWidget, reason: 'the keyboard is up');
-
-    await tester.tap(find.text('A'));
-    await tester.pumpAndSettle();
-    expect(tester.takeException(), isNull);
-  });
 
   testWidgets('Anagrams lays out and letters can be picked', (tester) async {
     await pump(tester,

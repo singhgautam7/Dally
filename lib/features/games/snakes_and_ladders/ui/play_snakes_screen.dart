@@ -2,9 +2,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/app_providers.dart';
+import '../../../../core/game/game_module.dart';
+import '../../../../core/game/game_registry.dart';
 import '../../../../core/game/how_to_launcher.dart';
 import '../../../../core/game/player_identity.dart';
 import '../../../../core/game/session_recorder.dart';
@@ -16,10 +17,12 @@ import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/type_scale.dart';
 import '../../../../core/util/game_clock.dart';
 import '../../../../core/widgets/die_view.dart';
+import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/widgets/game_scaffold.dart';
 import '../../../../core/widgets/pause_sheet.dart';
 import '../../../../core/widgets/player_chip.dart';
 import '../../../../core/widgets/primary_pill.dart';
+import '../../../../core/widgets/style_picker_sheet.dart';
 import '../logic/snakes_and_ladders.dart';
 import '../snakes_config.dart';
 import 'snakes_painter.dart';
@@ -189,13 +192,19 @@ class _PlaySnakesScreenState extends ConsumerState<PlaySnakesScreen>
       timeLabel: '',
       onHowToPlay: () => openHowTo(context, ref,
           moduleId: widget.moduleId, subtitle: widget.config.label),
+      extraRows: [
+        ?stylePickerRow(context, ref,
+            module: _module,
+            previewBuilder: (context, id) => TokenStylePreview(
+                styleId: id, seats: widget.config.playerCount)),
+      ],
     );
     if (!mounted) return;
     switch (result) {
       case PauseResult.restart:
         setState(_reset);
       case PauseResult.exit:
-        if (mounted) context.pop();
+        await leaveGame(context, progressSaved: false, ended: _game.isFinished);
       case PauseResult.resume:
       case null:
         if (wasRunning && !_game.isFinished) startClock();
@@ -211,17 +220,18 @@ class _PlaySnakesScreenState extends ConsumerState<PlaySnakesScreen>
     return out;
   }
 
+  GameModule get _module => ref.read(gameByIdProvider(widget.moduleId))!;
+
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
     final finished = _game.isFinished;
     final riding = _riding;
+    final tokenStyle = tokenStyleFromId(styleIdFor(ref, _module));
     return GameScaffold(
       onOverflow: _openPause,
-      onExitRequested: () async {
-        final leave = await showExitConfirm(context, ref, progressSaved: false);
-        if (leave && context.mounted) context.pop();
-      },
+      ended: _game.isFinished,
+      progressSaved: false,
       statusBar: PlayerStrip(
         identities: _seats,
         names: [
@@ -245,6 +255,7 @@ class _PlaySnakesScreenState extends ConsumerState<PlaySnakesScreen>
                 surfaceAlt: t.surfaceAlt,
                 textFaint: t.textFaint,
                 animatedPositions: _positions,
+                tokenStyle: tokenStyle,
                 linkAnim: riding == null
                     ? null
                     : (riding.$1, riding.$2, motionEased),
@@ -261,8 +272,20 @@ class _PlaySnakesScreenState extends ConsumerState<PlaySnakesScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (_lastFace != null) ...[
-                DieChip(value: _lastFace!, style: DiceStyle.classic, size: 34),
+              if (!finished) ...[
+                // The die is the roll button: same component as Quick Tools and
+                // Ludo, so there is one die in the app, not three.
+                GameDie(
+                  state: _busy
+                      ? DieSlotState.used
+                      : _lastFace == null
+                          ? DieSlotState.rollable
+                          : DieSlotState.rolled,
+                  value: _lastFace,
+                  tint: _seats[_game.current].color,
+                  size: 54,
+                  onRoll: _busy ? null : _roll,
+                ),
                 const Gap.h(Insets.s3),
               ],
               Flexible(
@@ -279,9 +302,10 @@ class _PlaySnakesScreenState extends ConsumerState<PlaySnakesScreen>
           if (finished) ...[
             PrimaryPill(label: 'Play again', onPressed: () => setState(_reset)),
             const Gap(Insets.s2 + 2),
-            PrimaryPill.secondary(label: 'Back to games', onPressed: () => context.pop()),
-          ] else
-            PrimaryPill(label: 'Roll', onPressed: _busy ? () {} : _roll),
+            PrimaryPill.secondary(
+                label: 'Back to games',
+                onPressed: () => leaveGame(context, ended: true)),
+          ],
         ],
       ),
     );

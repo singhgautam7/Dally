@@ -135,12 +135,72 @@ void main() {
       expect(g.legalMoves().firstWhere((m) => m.token == 0).to, kHome);
     });
 
-    test('a seat never stacks two tokens on one square', () {
+    test('two of a seat\'s own tokens may share a square', () {
       final g = LudoGame(playerCount: 2);
       g.tokens[0][0] = 10;
       g.tokens[0][1] = 13;
       forceRoll(g, 3);
-      expect(g.legalMoves().where((m) => m.token == 0), isEmpty);
+      final move = g.legalMoves().firstWhere((m) => m.token == 0);
+      expect(move.to, 13, reason: 'stacking on your own token is legal');
+      g.play(move);
+      expect(g.tokens[0][0], 13);
+      expect(g.tokens[0][1], 13);
+    });
+  });
+
+  group('selection', () {
+    test('a six offers every yard token alongside the ones in play', () {
+      final g = LudoGame(playerCount: 2);
+      g.tokens[0][0] = 10;
+      forceRoll(g, 6);
+      final moves = g.legalMoves();
+      expect(moves, hasLength(4), reason: 'three in the yard plus the one out');
+      expect(moves.where((m) => m.leavesBase), hasLength(3));
+      expect(moves.where((m) => !m.leavesBase), hasLength(1));
+    });
+
+    test('a six still frees a yard token when the entry square is taken', () {
+      // The bug: one token sitting on the entry square blocked every other
+      // token in the yard, so a six looked wasted.
+      final g = LudoGame(playerCount: 2);
+      g.tokens[0][0] = 1;
+      forceRoll(g, 6);
+      final moves = g.legalMoves();
+      expect(moves.where((m) => m.leavesBase), hasLength(3));
+    });
+
+    test('one token in play and a roll under six is a forced move', () {
+      final g = LudoGame(playerCount: 2);
+      g.tokens[0][0] = 10;
+      forceRoll(g, 4);
+      final forced = g.forcedMove;
+      expect(forced, isNotNull);
+      expect(forced!.token, 0);
+      expect(forced.to, 14);
+    });
+
+    test('with a real choice there is no forced move', () {
+      final g = LudoGame(playerCount: 2);
+      g.tokens[0][0] = 10;
+      g.tokens[0][1] = 20;
+      forceRoll(g, 4);
+      expect(g.legalMoves(), hasLength(2));
+      expect(g.forcedMove, isNull);
+    });
+
+    test('a pair on one square cannot be captured', () {
+      final g = LudoGame(playerCount: 2);
+      // Two of seat 1's tokens share ring 20 — a block, not a target.
+      g.tokens[1][0] = 20 - ringStart(1) + 1;
+      g.tokens[1][1] = g.tokens[1][0];
+      g.tokens[0][0] = 18;
+      forceRoll(g, 3);
+      final move = g.legalMoves().firstWhere((m) => m.token == 0);
+      expect(ringIndexOf(0, move.to), 20);
+      expect(move.captured, isEmpty);
+      g.play(move);
+      expect(g.tokens[1][0], isNot(kInBase));
+      expect(g.tokens[1][1], isNot(kInBase));
     });
   });
 
@@ -152,6 +212,17 @@ void main() {
       expect(g.die, 1);
       expect(g.awaitingMove, isFalse);
       expect(g.current, 1);
+    });
+
+    test('the three-sixes cap can be switched off', () {
+      final g = LudoGame(
+          playerCount: 2, rules: const LudoRules(threeSixesForfeit: false));
+      g.tokens[0][0] = 10;
+      for (var i = 0; i < 3; i++) {
+        forceRoll(g, 6);
+        g.play(g.legalMoves().firstWhere((m) => m.token == 0));
+      }
+      expect(g.current, 0, reason: 'the streak keeps going');
     });
 
     test('three sixes in a row forfeit the turn', () {

@@ -2,11 +2,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/storage/game_session.dart';
 import '../../../../core/game/session_recorder.dart';
-import '../../../../core/routing/routes.dart';
 import '../../../../core/game/how_to_launcher.dart';
 import '../../../../core/app_providers.dart';
 import '../../../../core/services/haptics.dart';
@@ -15,6 +13,7 @@ import '../../../../core/theme/motion.dart';
 import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/type_scale.dart';
 import '../../../../core/util/format.dart';
+import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/widgets/game_scaffold.dart';
 import '../../../../core/widgets/pause_sheet.dart';
 import '../../../../core/widgets/primary_pill.dart';
@@ -180,9 +179,17 @@ class _Play2048ScreenState extends ConsumerState<Play2048Screen> {
     }
   }
 
-  Future<void> _confirmExit() async {
-    final leave = await showExitConfirm(context, ref, progressSaved: true);
-    if (leave && mounted) context.go(Routes.home);
+  Future<void> _confirmExit() =>
+      leaveGame(context, ended: _showWin || _gameOver, progressSaved: true);
+
+  void _swipe(DragEndDetails d) {
+    final v = d.velocity.pixelsPerSecond;
+    if (v.distance < 60) return;
+    if (v.dx.abs() > v.dy.abs()) {
+      _move(v.dx > 0 ? Move2048.right : Move2048.left);
+    } else {
+      _move(v.dy > 0 ? Move2048.down : Move2048.up);
+    }
   }
 
   @override
@@ -190,14 +197,13 @@ class _Play2048ScreenState extends ConsumerState<Play2048Screen> {
     final t = context.tokens;
     return GameScaffold(
       onOverflow: _openPause,
-      onExitRequested: _confirmExit,
+      ended: _showWin || _gameOver,
+      progressSaved: true,
       statusBar: _ScoreRow(score: _board.score, best: _best.toInt()),
-      board: _Board(
-        board: _board,
-        ghosts: _ghosts,
-        onMove: _move,
-        interactive: !_showWin && !_gameOver,
-      ),
+      // Swiping works over the whole screen, not only the board — the empty
+      // strip under it is where a thumb naturally lands.
+      onPanEnd: _showWin || _gameOver ? null : _swipe,
+      board: _Board(board: _board, ghosts: _ghosts),
       controls: Padding(
         padding: const EdgeInsets.only(top: Insets.s4),
         child: _showWin
@@ -260,17 +266,10 @@ class _ScoreRow extends StatelessWidget {
 // ── Board with animated tiles ──────────────────────────────────────────────
 
 class _Board extends StatelessWidget {
-  const _Board({
-    required this.board,
-    required this.ghosts,
-    required this.onMove,
-    required this.interactive,
-  });
+  const _Board({required this.board, required this.ghosts});
 
   final Board2048 board;
   final List<Tile2048> ghosts;
-  final ValueChanged<Move2048> onMove;
-  final bool interactive;
 
   @override
   Widget build(BuildContext context) {
@@ -287,19 +286,6 @@ class _Board extends StatelessWidget {
 
         return SizedBox.square(
           dimension: s,
-          child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onPanEnd: interactive
-              ? (d) {
-                  final v = d.velocity.pixelsPerSecond;
-                  if (v.distance < 60) return;
-                  if (v.dx.abs() > v.dy.abs()) {
-                    onMove(v.dx > 0 ? Move2048.right : Move2048.left);
-                  } else {
-                    onMove(v.dy > 0 ? Move2048.down : Move2048.up);
-                  }
-                }
-              : null,
           child: Container(
             decoration: BoxDecoration(
               color: t.surface,
@@ -358,7 +344,6 @@ class _Board extends StatelessWidget {
               ],
             ),
           ),
-        ),
         );
       },
     );

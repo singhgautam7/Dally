@@ -21,6 +21,16 @@ class Link {
   int get hashCode => Object.hash(from, to);
 }
 
+/// How many ladders and snakes a board of [squares] carries.
+///
+/// The 10×10 numbers come straight from the design — "7 ladders · 8 snakes" —
+/// and the other sizes scale from the same density, so an 8×8 stays a
+/// five-minute game and a 12×12 stays busy without becoming a cat's cradle.
+({int ladders, int snakes}) linkCountsFor(int squares) => (
+      ladders: (squares * 0.07).round().clamp(2, 14),
+      snakes: (squares * 0.08).round().clamp(2, 16),
+    );
+
 /// Generates a board's links. Seeded, so a board is reproducible and every
 /// generation rule is testable.
 ///
@@ -28,44 +38,63 @@ class Link {
 /// * every endpoint (foot, top, head, tail) is a distinct square, so no link
 ///   can ever chain into another and no single roll resolves twice;
 /// * square 1 and the last square are never an endpoint;
-/// * a link spans **two to four rows** — long enough to matter, short enough
-///   that the board stays legible instead of becoming a cat's cradle;
-/// * ladders climb, snakes drop.
-///
-/// The counts are deliberately low. An earlier version put a link on every
-/// twelfth square with an unbounded span, which on a 10x10 drew sixteen lines
-/// across the whole board and buried the numbers underneath them.
+/// * ordinary links span **two to four rows** — long enough to matter, short
+///   enough that the board stays legible;
+/// * exactly one **long snake** starts in the top row and drops the player back
+///   into the first two rows. Every printed board has one, and without it the
+///   last stretch has no teeth;
+/// * ladders climb, snakes drop;
+/// * the counts match [linkCountsFor].
 List<Link> generateLinks(DallyRandom random, {required int columns, required int rows}) {
   final squares = columns * rows;
-  final pairs = (squares / 25).round().clamp(2, 5);
+  final counts = linkCountsFor(squares);
   final used = <int>{1, squares};
   final links = <Link>[];
 
-  int? freeSquare(int lowest, int highest) {
-    for (var attempt = 0; attempt < 40; attempt++) {
-      final s = random.range(lowest, highest);
-      if (!used.contains(s)) return s;
-    }
-    return null;
+  /// Free squares in `[lowest, highest]`, in random order. Walking a shuffled
+  /// pool rather than guessing is what lets the board actually reach its link
+  /// count on a crowded 12×12 instead of quietly coming up short.
+  List<int> pool(int lowest, int highest) => random.shuffled([
+        for (var s = lowest; s <= highest; s++)
+          if (!used.contains(s)) s,
+      ]);
+
+  // The long snake is placed first, so it always gets the room it needs: it
+  // starts in the top row and drops the player back into the first two.
+  var snakesLeft = counts.snakes;
+  final heads = pool(squares - columns + 1, squares - 1);
+  final tails = pool(2, math.min(squares - 1, columns * 2));
+  if (heads.isNotEmpty && tails.isNotEmpty) {
+    used
+      ..add(heads.first)
+      ..add(tails.first);
+    links.add(Link(heads.first, tails.first));
+    snakesLeft--;
   }
 
   // Ladders first: they are the ones players notice missing.
-  for (var kind = 0; kind < 2; kind++) {
-    final wantLadders = kind == 0;
-    for (var i = 0; i < pairs; i++) {
-      final low = freeSquare(2, squares - columns - 1);
-      if (low == null) continue;
-      final lowRow = (low - 1) ~/ columns;
-      final minRow = lowRow + 2;
-      if (minRow >= rows) continue;
-      final maxRow = math.min(rows - 1, lowRow + 4);
-      final high = freeSquare(
-          minRow * columns + 1, math.min(squares - 1, (maxRow + 1) * columns));
-      if (high == null || high == low) continue;
-      used
-        ..add(low)
-        ..add(high);
-      links.add(wantLadders ? Link(low, high) : Link(high, low));
+  for (final wantLadders in const [true, false]) {
+    final want = wantLadders ? counts.ladders : snakesLeft;
+    for (var i = 0; i < want; i++) {
+      var placed = false;
+      for (final low in pool(2, squares - columns - 1)) {
+        final lowRow = (low - 1) ~/ columns;
+        final minRow = lowRow + 2;
+        if (minRow >= rows) continue;
+        final maxRow = math.min(rows - 1, lowRow + 4);
+        final highs = pool(minRow * columns + 1,
+            math.min(squares - 1, (maxRow + 1) * columns));
+        if (highs.isEmpty) continue;
+        final high = highs.first;
+        used
+          ..add(low)
+          ..add(high);
+        links.add(wantLadders ? Link(low, high) : Link(high, low));
+        placed = true;
+        break;
+      }
+      // The board is full: stop rather than spin.
+      if (!placed) break;
     }
   }
   links.sort((a, b) => a.from.compareTo(b.from));

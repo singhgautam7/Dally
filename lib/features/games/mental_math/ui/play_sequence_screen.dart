@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/app_providers.dart';
 import '../../../../core/game/game_module.dart';
@@ -8,6 +7,7 @@ import '../../../../core/game/session_recorder.dart';
 import '../../../../core/services/haptics.dart';
 import '../../../../core/storage/game_session.dart';
 import '../../../../core/theme/dally_tokens.dart';
+import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/type_scale.dart';
 import '../../../../core/util/game_clock.dart';
@@ -155,7 +155,7 @@ class _PlaySequenceScreenState extends ConsumerState<PlaySequenceScreen>
         ],
         session: _session,
         onPlayAgain: () => setState(_start),
-        onBack: () => context.pop(),
+        onBack: () => leaveGame(context, ended: true),
       );
     }
 

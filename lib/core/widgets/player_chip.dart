@@ -94,3 +94,57 @@ class PlayerStrip extends StatelessWidget {
     );
   }
 }
+
+/// The style-picker preview shared by Ludo and Snakes & Ladders: the four seat
+/// tokens drawn in the style being previewed, at board size.
+class TokenStylePreview extends StatelessWidget {
+  const TokenStylePreview({super.key, required this.styleId, this.seats = 4});
+
+  final String styleId;
+  final int seats;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: 112,
+        height: 34,
+        child: CustomPaint(
+          painter: _TokenStylePainter(
+            style: tokenStyleFromId(styleId),
+            identities: identitiesFor(seats),
+            knockout: context.tokens.surface,
+          ),
+        ),
+      );
+}
+
+class _TokenStylePainter extends CustomPainter {
+  const _TokenStylePainter({
+    required this.style,
+    required this.identities,
+    required this.knockout,
+  });
+
+  final PlayerTokenStyle style;
+  final List<PlayerIdentity> identities;
+  final Color knockout;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final step = size.width / identities.length;
+    final radius = size.height * 0.34;
+    for (var i = 0; i < identities.length; i++) {
+      paintPlayerToken(
+        canvas,
+        identities[i],
+        Offset(step * (i + 0.5), size.height / 2),
+        radius,
+        style: style,
+        knockout: knockout,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_TokenStylePainter old) =>
+      old.style != style || old.knockout != knockout;
+}

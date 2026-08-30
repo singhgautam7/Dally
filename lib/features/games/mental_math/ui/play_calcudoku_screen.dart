@@ -157,6 +157,7 @@ class _PlayCalcudokuScreenState extends ConsumerState<PlayCalcudokuScreen>
     final conflict = findConflict(_values, puzzle.size);
 
     return MentalMathScaffold(
+      ended: _solved,
       module: widget.module,
       difficulty: _difficulty,
       progress: _values.where((v) => v != 0).length / _values.length,

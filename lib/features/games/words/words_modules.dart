@@ -8,7 +8,6 @@ import '../../../core/theme/dally_tokens.dart';
 import '../../../core/widgets/game_glyph.dart';
 import '../../../core/widgets/how_to_play.dart';
 import 'ui/play_anagrams_screen.dart';
-import 'ui/play_word_guess_screen.dart';
 import 'ui/play_word_search_screen.dart';
 import 'ui/setup_words_screen.dart';
 import 'words_config.dart';
@@ -78,63 +77,6 @@ abstract class WordGameModule extends GameModule {
     final best = agg.metric('score').best(higherIsBetter: true);
     return best == null ? null : 'Best ${StatFormat.number.render(best)}';
   }
-}
-
-/// Word Guess — a hidden word, six tries, per-letter feedback.
-class WordGuessModule extends WordGameModule {
-  @override
-  String get id => 'word_guess';
-
-  @override
-  String get title => 'Word Guess';
-
-  @override
-  String get tagline => 'Six tries, and the letters tell you where you stand.';
-
-  @override
-  String get roundsLabel => 'Words';
-
-  @override
-  List<String> get tags =>
-      const ['letters', 'guess', 'vocabulary', 'deduction', 'spelling', 'five letters'];
-
-  @override
-  Widget buildPlayScreen(BuildContext context, WidgetRef ref, GameConfig config) =>
-      PlayWordGuessScreen(moduleId: id, config: config as WordsConfig);
-
-  @override
-  HowToContent? buildHowToPlay(BuildContext context) {
-    final t = context.tokens;
-    return HowToContent(
-      goal: 'Find the hidden word before the tries run out. Every guess has to '
-          'be a real word — a rejected guess costs you nothing.',
-      readingLabel: 'Reading a guess',
-      reading: [
-        HowToLegend(_swatch(t.success, t.onAccent, 'A'),
-            'Right letter, right place.'),
-        HowToLegend(_swatch(t.accent, t.onAccent, 'B'),
-            'That letter is in the word, but somewhere else.'),
-        HowToLegend(_swatch(t.surfaceAlt, t.textPrimary, 'C'),
-            'Not in the word — or no copies of it are left.'),
-      ],
-      controls: [
-        HowToStep(Icon(Icons.keyboard_alt_outlined, size: 20, color: t.textMuted),
-            'Type and enter', 'The keyboard colours in as you learn letters'),
-      ],
-      tip: 'A second guess that shares no letters with the first tells you far '
-          'more than one that reshuffles the same ones.',
-    );
-  }
-
-  static Widget _swatch(Color background, Color foreground, String letter) => Container(
-        width: 22,
-        height: 22,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(5)),
-        child: Text(letter,
-            style: TextStyle(
-                fontFamily: 'JetBrains Mono', fontSize: 12, color: foreground)),
-      );
 }
 
 /// Anagrams — the letters are all there, in the wrong order.

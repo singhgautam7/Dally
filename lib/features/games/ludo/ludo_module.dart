@@ -50,6 +50,16 @@ class LudoModule extends GameModule {
   bool get supportsSaveResume => false;
 
   @override
+  List<StyleOption> get styleOptions => const [
+        StyleOption(id: 'pin', label: 'Pin', recommended: true),
+        StyleOption(id: 'pawn', label: 'Pawn'),
+        StyleOption(id: 'geometric', label: 'Geometric'),
+      ];
+
+  @override
+  String get styleNoun => 'Token';
+
+  @override
   List<StatBlock> statBlocks(GameAggregate agg) {
     return [
       if (agg.sessions > 0)

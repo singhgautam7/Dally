@@ -1,13 +1,12 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/storage/game_session.dart';
 import '../../../../core/game/game_registry.dart';
 import '../../../../core/game/session_recorder.dart';
-import '../../../../core/routing/routes.dart';
 import '../../../../core/game/how_to_launcher.dart';
 import '../../../../core/app_providers.dart';
 import '../../../../core/services/haptics.dart';
@@ -16,6 +15,7 @@ import '../../../../core/theme/dally_tokens.dart';
 import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../../../../core/theme/type_scale.dart';
+import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/widgets/game_scaffold.dart';
 import '../../../../core/widgets/pause_sheet.dart';
 import '../../../../core/widgets/style_picker_sheet.dart';
@@ -148,6 +148,7 @@ class _PlaySnakeScreenState extends ConsumerState<PlaySnakeScreen> with WidgetsB
           previewBuilder: snakeStylePreview,
         ),
         const OnScreenControlsRow(),
+        const DpadPositionRow(),
       ],
     );
     if (!mounted) return;
@@ -162,10 +163,7 @@ class _PlaySnakeScreenState extends ConsumerState<PlaySnakeScreen> with WidgetsB
     }
   }
 
-  Future<void> _confirmExit() async {
-    final leave = await showExitConfirm(context, ref, progressSaved: false);
-    if (leave && mounted) context.go(Routes.home);
-  }
+  Future<void> _confirmExit() => leaveGame(context, ended: _dead);
 
   @override
   Widget build(BuildContext context) {
@@ -173,19 +171,20 @@ class _PlaySnakeScreenState extends ConsumerState<PlaySnakeScreen> with WidgetsB
     final style = snakeStyleFromId(
         ref.watch(settingsControllerProvider.select((s) => s.styleChoices[widget.moduleId])));
     final controls = ref.watch(settingsControllerProvider.select((s) => s.onScreenControls));
-    final handedness = ref.watch(settingsControllerProvider.select((s) => s.handedness));
+    final dpadPosition = ref.watch(settingsControllerProvider.select((s) => s.dpadPosition));
+    final showDpad = !_dead && controls == OnScreenControls.dpad;
+    final fillsArea = showDpad && dpadPosition == DpadPosition.centre;
 
     return GameScaffold(
       onOverflow: _openPause,
-      onExitRequested: _confirmExit,
+      ended: _dead,
+      // Steering works over the whole screen — board, empty space and the pad
+      // itself. The pad's own keys take taps; a drag across them still steers.
+      onPanStart: _dead ? null : (d) => _panStart = d.localPosition,
+      onPanUpdate: _dead ? null : _handlePan,
+      fillControls: fillsArea,
       statusBar: _StatusBar(length: _game.length, best: _best.toInt(), dead: _dead, tokens: t),
-      board: _Arena(
-        game: _game,
-        style: style,
-        dead: _dead,
-        onPanStart: (d) => _panStart = d.localPosition,
-        onPanUpdate: _handlePan,
-      ),
+      board: _Arena(game: _game, style: style, dead: _dead),
       controls: _dead
           ? Padding(
               padding: const EdgeInsets.only(top: Insets.s5),
@@ -193,14 +192,14 @@ class _PlaySnakeScreenState extends ConsumerState<PlaySnakeScreen> with WidgetsB
                 length: _game.length,
                 outOfBounds: _outOfBounds,
                 onAgain: _restart,
-                onChangeSpeed: () => context.pop(),
+                onChangeSpeed: () => leaveGame(context, ended: true),
               ),
             )
           : _Controls(
               started: _started,
               config: widget.config,
-              showDpad: controls == OnScreenControls.dpad,
-              rightHanded: handedness == Handedness.right,
+              showDpad: showDpad,
+              position: dpadPosition,
               pressed: _pressed,
               onSteer: (d) {
                 setState(() => _pressed = d);
@@ -263,19 +262,11 @@ class _StatusBar extends StatelessWidget {
 }
 
 class _Arena extends StatelessWidget {
-  const _Arena({
-    required this.game,
-    required this.style,
-    required this.dead,
-    required this.onPanStart,
-    required this.onPanUpdate,
-  });
+  const _Arena({required this.game, required this.style, required this.dead});
 
   final SnakeGame game;
   final SnakeStyle style;
   final bool dead;
-  final GestureDragStartCallback onPanStart;
-  final GestureDragUpdateCallback onPanUpdate;
 
   @override
   Widget build(BuildContext context) {
@@ -283,27 +274,22 @@ class _Arena extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, c) {
         final side = c.maxWidth < c.maxHeight ? c.maxWidth : c.maxHeight;
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onPanStart: onPanStart,
-          onPanUpdate: onPanUpdate,
-          child: Container(
-            width: side,
-            height: side,
-            decoration: BoxDecoration(
-              color: t.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: t.surfaceBorder,
-            ),
-            child: CustomPaint(
-              painter: SnakePainter(
-                game: game,
-                style: style,
-                snakeColor: t.accent,
-                foodColor: t.danger,
-                cellBg: t.surface,
-                dead: dead,
-              ),
+        return Container(
+          width: side,
+          height: side,
+          decoration: BoxDecoration(
+            color: t.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: t.surfaceBorder,
+          ),
+          child: CustomPaint(
+            painter: SnakePainter(
+              game: game,
+              style: style,
+              snakeColor: t.accent,
+              foodColor: t.danger,
+              cellBg: t.surface,
+              dead: dead,
             ),
           ),
         );
@@ -317,7 +303,7 @@ class _Controls extends StatelessWidget {
     required this.started,
     required this.config,
     required this.showDpad,
-    required this.rightHanded,
+    required this.position,
     required this.pressed,
     required this.onSteer,
   });
@@ -325,43 +311,78 @@ class _Controls extends StatelessWidget {
   final bool started;
   final SnakeConfig config;
   final bool showDpad;
-  final bool rightHanded;
+  final DpadPosition position;
   final Dir? pressed;
   final ValueChanged<Dir> onSteer;
 
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
+    final centred = showDpad && position == DpadPosition.centre;
+
+    final hint = !started
+        ? Padding(
+            padding: const EdgeInsets.only(top: Insets.s4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.swipe_rounded, size: 18, color: t.textMuted),
+                    const Gap.h(Insets.s2 + 2),
+                    Flexible(
+                      child: Text('Swipe anywhere to steer',
+                          overflow: TextOverflow.ellipsis,
+                          style: DallyType.bodyStrong
+                              .copyWith(fontSize: 16, color: t.textPrimary)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(config.label,
+                    style: DallyType.body.copyWith(fontSize: 12, color: t.textFaint)),
+              ],
+            ),
+          )
+        : null;
+
+    if (centred) {
+      // The pad takes the whole area under the board, keys sized from it.
+      return Column(
+        children: [
+          ?hint,
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, c) {
+                // The pad takes the smaller of the two axes, never smaller than
+                // the corner pad — and scales down rather than overflowing when
+                // the area under the board is genuinely short.
+                final key = math.max(38.0, math.min(c.maxWidth, c.maxHeight) / 3.4);
+                return Center(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: _DPad(
+                        pressed: pressed, onSteer: onSteer, tokens: t, keySize: key),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      );
+    }
+
     return SizedBox(
       height: 150,
       child: Stack(
         children: [
-          if (!started)
-            Align(
-              alignment: Alignment.topCenter,
-              child: Padding(
-                padding: const EdgeInsets.only(top: Insets.s4),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.swipe_rounded, size: 18, color: t.textMuted),
-                        const Gap.h(Insets.s2 + 2),
-                        Text('Swipe anywhere to steer',
-                            style: DallyType.bodyStrong.copyWith(fontSize: 16, color: t.textPrimary)),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(config.label,
-                        style: DallyType.body.copyWith(fontSize: 12, color: t.textFaint)),
-                  ],
-                ),
-              ),
-            ),
+          if (hint != null) Align(alignment: Alignment.topCenter, child: hint),
           if (showDpad)
             Align(
-              alignment: rightHanded ? Alignment.bottomRight : Alignment.bottomLeft,
+              alignment: position == DpadPosition.right
+                  ? Alignment.bottomRight
+                  : Alignment.bottomLeft,
               child: _DPad(pressed: pressed, onSteer: onSteer, tokens: t),
             ),
         ],
@@ -371,44 +392,56 @@ class _Controls extends StatelessWidget {
 }
 
 class _DPad extends StatelessWidget {
-  const _DPad({required this.pressed, required this.onSteer, required this.tokens});
+  const _DPad({
+    required this.pressed,
+    required this.onSteer,
+    required this.tokens,
+    this.keySize = 38,
+  });
+
   final Dir? pressed;
   final ValueChanged<Dir> onSteer;
   final DallyTokens tokens;
 
+  /// 38 in a corner; in Centre the pad is sized from the free area, so it can
+  /// be several times bigger.
+  final double keySize;
+
   @override
   Widget build(BuildContext context) {
+    final gap = keySize * 0.11;
     Widget key(Dir d, IconData icon) {
       final on = pressed == d;
       return GestureDetector(
         onTap: () => onSteer(d),
         child: Container(
-          width: 38,
-          height: 38,
+          width: keySize,
+          height: keySize,
           decoration: BoxDecoration(
             color: on ? tokens.accent.withValues(alpha: 0.22) : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(keySize * 0.32),
             border: Border.all(color: on ? tokens.accent : tokens.border),
           ),
-          child: Icon(icon, size: 15, color: on ? tokens.accent : tokens.textMuted),
+          child: Icon(icon,
+              size: keySize * 0.4, color: on ? tokens.accent : tokens.textMuted),
         ),
       );
     }
 
-    const empty = SizedBox(width: 38, height: 38);
+    final empty = SizedBox(width: keySize, height: keySize);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Row(mainAxisSize: MainAxisSize.min, children: [empty, key(Dir.up, Icons.keyboard_arrow_up_rounded), empty]),
-        const SizedBox(height: 4),
+        SizedBox(height: gap),
         Row(mainAxisSize: MainAxisSize.min, children: [
           key(Dir.left, Icons.keyboard_arrow_left_rounded),
-          const SizedBox(width: 4),
+          SizedBox(width: gap),
           empty,
-          const SizedBox(width: 4),
+          SizedBox(width: gap),
           key(Dir.right, Icons.keyboard_arrow_right_rounded),
         ]),
-        const SizedBox(height: 4),
+        SizedBox(height: gap),
         Row(mainAxisSize: MainAxisSize.min, children: [empty, key(Dir.down, Icons.keyboard_arrow_down_rounded), empty]),
       ],
     );

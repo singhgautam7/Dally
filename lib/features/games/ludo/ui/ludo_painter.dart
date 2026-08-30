@@ -26,6 +26,9 @@ class LudoPainter extends CustomPainter {
     required this.animating,
     required this.animatedCell,
     required this.pulse,
+    required this.tokenStyle,
+    this.poppedBadge,
+    this.badgePop = 1,
   });
 
   final LudoGame game;
@@ -47,6 +50,14 @@ class LudoPainter extends CustomPainter {
 
   /// 0→1 breathing value for the movable-token highlight.
   final double pulse;
+
+  /// Pin (default), pawn, or the bare identity shape — chosen in the pause
+  /// sheet.
+  final PlayerTokenStyle tokenStyle;
+
+  /// The cell whose count badge is popping, and how far through the pop it is.
+  final Offset? poppedBadge;
+  final double badgePop;
 
   double _cell = 1;
   Offset _origin = Offset.zero;
@@ -82,11 +93,13 @@ class LudoPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.4,
       );
-      // The four resting rings, so an empty yard still reads as four slots.
+      // The four resting sockets. Small: a tip-anchored pin stands *on* its
+      // spot rather than sitting inside it, so a big ring would read as an
+      // empty container next to an occupied one.
       for (final spot in LudoLayout.yardSpots(p)) {
         canvas.drawCircle(
           _at(spot),
-          _cell * 0.42,
+          _cell * 0.28,
           Paint()
             ..color = identities[p].color.withValues(alpha: 0.4)
             ..style = PaintingStyle.stroke
@@ -166,7 +179,8 @@ class LudoPainter extends CustomPainter {
   }
 
   void _paintTokens(Canvas canvas) {
-    // A ring square can hold several tokens; fan them so none is hidden.
+    // A cell can hold several tokens, of one colour or of several. Group them
+    // so each cell is drawn as a whole rather than token by token.
     final byCell = <Offset, List<(int, int)>>{};
     for (var p = 0; p < identities.length; p++) {
       for (var i = 0; i < 4; i++) {
@@ -178,40 +192,98 @@ class LudoPainter extends CustomPainter {
       }
     }
 
-    void token((int, int) who, Offset cell, {int of = 1, int at = 0}) {
-      final (p, i) = who;
-      var centre = _at(cell);
-      if (of > 1) {
-        final shift = _cell * 0.22 * (at - (of - 1) / 2);
-        centre = centre.translate(shift, shift * 0.4);
+    // Top to bottom: a pin's head overflows the cell above it, so the lower
+    // token has to be drawn later or it ends up behind its own neighbour.
+    final cells = byCell.keys.toList()
+      ..sort((a, b) => a.dy == b.dy ? a.dx.compareTo(b.dx) : a.dy.compareTo(b.dy));
+    for (final cell in cells) {
+      // Where each token on a shared cell goes is pure geometry, decided in the
+      // layout — the painter only draws what it is handed.
+      for (final place in LudoLayout.placeOnCell(byCell[cell]!)) {
+        final centre = _at(cell) + place.offset * _cell;
+        _paintToken(canvas, centre, place.player, place.token, scale: place.scale);
+        if (place.count > 1) {
+          _paintCountBadge(
+              canvas, cell, centre, place.player, place.count, place.scale);
+        }
       }
-      final onTurn = p == game.current && !game.isFinished;
-      if (onTurn && movable.contains(i) && animating == null) {
-        canvas.drawCircle(
-          centre,
-          _cell * 0.5,
-          Paint()..color = accent.withValues(alpha: 0.18 + 0.3 * pulse.pulseAlpha),
-        );
-      }
-      paintPlayerToken(
-        canvas,
-        identities[p],
-        centre,
-        _cell * 0.33,
-        ring: surface,
-        ringWidth: _cell * 0.06,
-      );
     }
-
-    byCell.forEach((cell, occupants) {
-      for (var k = 0; k < occupants.length; k++) {
-        token(occupants[k], cell, of: occupants.length, at: k);
-      }
-    });
 
     final anim = animating;
     final cell = animatedCell;
-    if (anim != null && cell != null) token(anim, cell);
+    if (anim != null && cell != null) {
+      _paintToken(canvas, _at(cell), anim.$1, anim.$2, scale: 1);
+    }
+  }
+
+  void _paintToken(Canvas canvas, Offset centre, int player, int token,
+      {required double scale}) {
+    final radius = _cell * 0.33 * scale;
+    final onTurn = player == game.current && !game.isFinished;
+    if (onTurn && movable.contains(token) && animating == null) {
+      // Around the head, which is the part of a token the eye reads — a halo
+      // the size of the whole cell would swallow a fanned neighbour.
+      final at = tokenStyle == PlayerTokenStyle.pin
+          ? pinHeadCentre(centre, radius)
+          : centre;
+      canvas.drawCircle(
+        at,
+        _cell * 0.36 * scale,
+        Paint()..color = accent.withValues(alpha: 0.18 + 0.3 * pulse.pulseAlpha),
+      );
+    }
+    paintPlayerToken(
+      canvas,
+      identities[player],
+      centre,
+      radius,
+      ring: surface,
+      ringWidth: _cell * 0.06 * scale,
+      style: tokenStyle,
+      knockout: surface,
+    );
+  }
+
+  /// The `×N` badge over a collapsed stack, in the seat's own colour with the
+  /// board punched through the numerals.
+  void _paintCountBadge(Canvas canvas, Offset cell, Offset centre, int player,
+      int count, double scale) {
+    final pop = cell == poppedBadge ? badgePop : 1.0;
+    final height = _cell * 0.42 * scale * pop;
+    // Directly over the token's head — in its own column, so which token the
+    // count belongs to is never in question, and clear of the point that
+    // anchors the cell.
+    final radius = _cell * 0.33 * scale;
+    final head = tokenStyle == PlayerTokenStyle.pin
+        ? pinHeadCentre(centre, radius)
+        : centre;
+    final clearance = (tokenStyle == PlayerTokenStyle.pin
+            ? pinHeadRadius(radius)
+            : radius) +
+        height * 0.6;
+    final at = head.translate(0, -clearance);
+    final label = '×$count';
+    final painter = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: TextStyle(
+          fontFamily: 'JetBrains Mono',
+          fontSize: height * 0.62,
+          height: 1,
+          fontWeight: FontWeight.w700,
+          color: surface,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    final width = math.max(height, painter.width + height * 0.5);
+    final rect = Rect.fromCenter(center: at, width: width, height: height);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, Radius.circular(height / 2)),
+      Paint()..color = identities[player].color,
+    );
+    painter.paint(canvas, at - Offset(painter.width / 2, painter.height / 2));
   }
 
   @override

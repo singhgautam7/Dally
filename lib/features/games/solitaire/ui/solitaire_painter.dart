@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
 
@@ -8,13 +9,33 @@ import '../logic/cards.dart';
 import '../logic/solitaire.dart';
 import '../logic/solitaire_layout.dart';
 
-/// The two card faces. Geometry only — every colour comes from tokens, which is
-/// what lets one style work in all eight palettes. Suits are the standard
-/// typographic glyphs, drawn as text: no licensed deck art anywhere.
-enum CardStyle { glyph, numeral }
+/// The two card faces from the design. Geometry only; the *colours* of a card
+/// face are a deliberate token exception, on the same footing as the two chess
+/// piece colours — a card is a card in every theme, and only the back and the
+/// empty slots follow the palette. In particular the red is a fixed brick red
+/// rather than the danger token, so an invalid-move flash can never be mistaken
+/// for "this card is a heart".
+enum CardStyle {
+  /// Rank and suit in the top-left corner, a larger suit at bottom-right — the
+  /// reading position that still works when a card is 19px from the one below.
+  classic,
+
+  /// Rank centred and large with the suit beneath it. Cleaner as a whole table,
+  /// but only legible on the exposed card of a pile.
+  minimal,
+}
 
 CardStyle cardStyleFromId(String id) =>
-    id == 'numeral' ? CardStyle.numeral : CardStyle.glyph;
+    id == 'minimal' ? CardStyle.minimal : CardStyle.classic;
+
+/// The fixed card-face palette (design §10: "face #EEEAE1, black suits #26241F,
+/// red suits #C1443B").
+const Color kCardFace = Color(0xFFEEEAE1);
+const Color kCardInk = Color(0xFF26241F);
+const Color kCardRed = Color(0xFFC1443B);
+
+/// How many cards the Klondike deal puts on the table: 1+2+…+7.
+const int _dealtCards = 28;
 
 /// The whole table in one painter: stock, waste, foundations, every column, and
 /// whatever card is currently in flight.
@@ -22,8 +43,6 @@ class SolitairePainter extends CustomPainter {
   SolitairePainter({
     required this.game,
     required this.style,
-    required this.ink,
-    required this.red,
     required this.surface,
     required this.surfaceAlt,
     required this.border,
@@ -31,15 +50,13 @@ class SolitairePainter extends CustomPainter {
     required this.textFaint,
     required this.flight,
     required this.shake,
+    required this.drag,
+    required this.deal,
   });
 
   final Solitaire game;
   final CardStyle style;
 
-  /// Black suits use the ink colour; red suits the danger token, the only red
-  /// that is guaranteed to read in every palette.
-  final Color ink;
-  final Color red;
   final Color surface;
   final Color surfaceAlt;
   final Color border;
@@ -52,12 +69,20 @@ class SolitairePainter extends CustomPainter {
   /// Sideways nudge on a rejected card.
   final (CardRef ref, double dx)? shake;
 
+  /// The run currently under the finger: where it came from, the cards, and the
+  /// top-left it is drawn at right now.
+  final (CardRef from, List<PlayingCard> cards, Offset at)? drag;
+
+  /// Deal progress, `0 … 1`. Below 1 the 28 tableau cards fly out of the stock
+  /// one after another; at 1 the table is simply dealt.
+  final double deal;
+
   late SolitaireLayout _layout;
 
   @override
   void paint(Canvas canvas, Size size) {
     _layout = SolitaireLayout(game, size);
-    final flying = {...?flight?.$1};
+    final flying = {...?flight?.$1, ...?drag?.$2};
 
     _slot(canvas, _layout.stockRect, glyph: game.stock.isEmpty ? '↻' : null);
     if (game.stock.isNotEmpty) _back(canvas, _layout.stockRect);
@@ -89,11 +114,35 @@ class SolitairePainter extends CustomPainter {
       }
       for (var i = 0; i < column.length; i++) {
         if (flying.contains(column[i])) continue;
-        final rect = _layout.tableauRect(c, i);
+        var rect = _layout.tableauRect(c, i);
+        if (deal < 1) {
+          // Card k of the deal leaves the stock at k × (1/28) of the run.
+          final order = c * (c + 1) ~/ 2 + i;
+          final t = (deal * _dealtCards - order).clamp(0.0, 1.0);
+          if (t <= 0) continue;
+          rect = Rect.fromLTWH(
+            lerpDouble(_layout.stockRect.left, rect.left, t)!,
+            lerpDouble(_layout.stockRect.top, rect.top, t)!,
+            rect.width,
+            rect.height,
+          );
+        }
         game.isFaceUp(c, i)
             ? _face(canvas, rect, column[i],
                 nudge: _nudgeFor(CardRef(PileKind.tableau, c, i)))
             : _back(canvas, rect);
+      }
+    }
+
+    final held = drag;
+    if (held != null) {
+      for (var i = 0; i < held.$2.length; i++) {
+        _face(
+          canvas,
+          Rect.fromLTWH(held.$3.dx, held.$3.dy + i * _layout.faceUpStep,
+              _layout.cardWidth, _layout.cardHeight),
+          held.$2[i],
+        );
       }
     }
 
@@ -155,8 +204,7 @@ class SolitairePainter extends CustomPainter {
   }
 
   void _face(Canvas canvas, Rect where, PlayingCard card, {double nudge = 0}) =>
-      paintCardFace(canvas, where.translate(nudge, 0), card, style,
-          ink: ink, red: red, surface: surface, border: border);
+      paintCardFace(canvas, where.translate(nudge, 0), card, style, border: border);
 
   void _text(Canvas canvas, Offset at, String text, double size, Color colour,
           {bool centred = false}) =>
@@ -168,18 +216,18 @@ class SolitairePainter extends CustomPainter {
 
 /// One card face. Top-level so the style picker's preview draws with exactly
 /// the code the board does, rather than a look-alike.
+///
+/// [border] is the only themed colour here — a hairline that keeps the fixed
+/// cream face separated from a light board.
 void paintCardFace(
   Canvas canvas,
   Rect rect,
   PlayingCard card,
   CardStyle style, {
-  required Color ink,
-  required Color red,
-  required Color surface,
   required Color border,
 }) {
   final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(Radii.cell));
-  canvas.drawRRect(rrect, Paint()..color = surface);
+  canvas.drawRRect(rrect, Paint()..color = kCardFace);
   canvas.drawRRect(
     rrect.deflate(0.5),
     Paint()
@@ -187,23 +235,31 @@ void paintCardFace(
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1,
   );
-  final colour = card.isRed ? red : ink;
-  final pad = rect.width * 0.12;
-  final corner = rect.topLeft + Offset(pad, pad * 0.7);
+  final colour = card.isRed ? kCardRed : kCardInk;
 
   switch (style) {
-    case CardStyle.glyph:
-      _paintText(canvas, corner, card.rankLabel, rect.width * 0.30, colour);
-      _paintText(canvas, corner + Offset(0, rect.width * 0.34), card.suit.glyph,
-          rect.width * 0.24, colour);
-      _paintText(canvas, rect.center + Offset(rect.width * 0.16, rect.height * 0.14),
-          card.suit.glyph, rect.width * 0.42, colour.withValues(alpha: 0.55),
+    case CardStyle.classic:
+      // Corner index: rank over suit, inside the 19px sliver a fanned card
+      // leaves showing. The second suit sits bottom-right at full weight.
+      final corner = rect.topLeft + Offset(rect.width * 0.11, rect.height * 0.05);
+      _paintText(canvas, corner, card.rankLabel, rect.width * 0.32, colour);
+      _paintText(canvas, corner + Offset(rect.width * 0.02, rect.width * 0.36),
+          card.suit.glyph, rect.width * 0.26, colour);
+      _paintText(
+          canvas,
+          Offset(rect.right - rect.width * 0.26, rect.bottom - rect.height * 0.20),
+          card.suit.glyph,
+          rect.width * 0.34,
+          colour,
           centred: true);
-    case CardStyle.numeral:
-      _paintText(canvas, corner, '${card.rankLabel}${card.suit.glyph}',
-          rect.width * 0.26, colour);
-      _paintText(canvas, rect.center + Offset(0, rect.height * 0.10), card.rankLabel,
-          rect.width * 0.52, colour.withValues(alpha: 0.5), centred: true);
+    case CardStyle.minimal:
+      // Rank centred and large, suit directly beneath it.
+      _paintText(canvas, Offset(rect.center.dx, rect.top + rect.height * 0.38),
+          card.rankLabel, rect.width * 0.56, colour,
+          centred: true);
+      _paintText(canvas, Offset(rect.center.dx, rect.top + rect.height * 0.72),
+          card.suit.glyph, rect.width * 0.30, colour,
+          centred: true);
   }
 }
 

@@ -1,10 +1,12 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/app_providers.dart';
+import '../../../../core/game/game_module.dart';
+import '../../../../core/game/game_registry.dart';
 import '../../../../core/game/how_to_launcher.dart';
 import '../../../../core/game/player_identity.dart';
 import '../../../../core/game/session_recorder.dart';
@@ -13,13 +15,18 @@ import '../../../../core/storage/game_session.dart';
 import '../../../../core/theme/dally_tokens.dart';
 import '../../../../core/theme/motion.dart';
 import '../../../../core/theme/spacing.dart';
+import '../../../../core/theme/theme_controller.dart';
 import '../../../../core/theme/type_scale.dart';
 import '../../../../core/util/game_clock.dart';
 import '../../../../core/widgets/die_view.dart';
+import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/widgets/game_scaffold.dart';
 import '../../../../core/widgets/pause_sheet.dart';
 import '../../../../core/widgets/player_chip.dart';
 import '../../../../core/widgets/primary_pill.dart';
+import '../../../../core/widgets/style_picker_sheet.dart';
+import 'ludo_pause_extras.dart';
+import 'ludo_seat.dart';
 import '../logic/ludo.dart';
 import '../logic/ludo_layout.dart';
 import '../ludo_config.dart';
@@ -31,6 +38,11 @@ class PlayLudoScreen extends ConsumerStatefulWidget {
 
   final String moduleId;
   final LudoConfig config;
+
+  /// How long the shared dice animation cycles faces before the result shows.
+  /// The result itself is drawn from the seedable RNG *before* this runs, so
+  /// the spin is presentation only and interrupting it changes nothing.
+  static const Duration rollSpin = Duration(milliseconds: 320);
 
   @override
   ConsumerState<PlayLudoScreen> createState() => _PlayLudoScreenState();
@@ -53,6 +65,20 @@ class _PlayLudoScreenState extends ConsumerState<PlayLudoScreen>
   (int, int)? _hopping;
   List<Offset> _hopPath = const [];
 
+  /// The seat whose die is mid-roll, or -1. The core has already resolved the
+  /// roll — this only keeps the *presentation* on the roller while the faces
+  /// cycle, so a dead roll doesn't hand the animation to the next player.
+  int _rollingSeat = -1;
+  Timer? _rollTimer;
+
+  /// The cell whose ×N badge just changed, and so pops once.
+  Offset? _poppedBadge;
+
+  /// The last face each seat rolled, or null before their first roll. A seat
+  /// that is not on turn shows this rather than nothing, so the table can see
+  /// what everyone else got.
+  late List<int?> _lastFace;
+
   @override
   bool get motionReduced => _reduceMotion;
   bool _reduceMotion = false;
@@ -73,6 +99,7 @@ class _PlayLudoScreenState extends ConsumerState<PlayLudoScreen>
 
   @override
   void dispose() {
+    _rollTimer?.cancel();
     disposeClock();
     super.dispose();
   }
@@ -87,6 +114,10 @@ class _PlayLudoScreenState extends ConsumerState<PlayLudoScreen>
     _recorded = false;
     _captures = 0;
     _hopping = null;
+    _rollTimer?.cancel();
+    _rollingSeat = -1;
+    _poppedBadge = null;
+    _lastFace = List<int?>.filled(widget.config.playerCount, null);
     _strip = '${widget.config.nameOf(_game.current)} starts — roll';
     resetClock();
     startClock();
@@ -94,28 +125,51 @@ class _PlayLudoScreenState extends ConsumerState<PlayLudoScreen>
 
   // ── Turn flow ─────────────────────────────────────────────────────────────
 
-  void _roll() {
-    if (_game.isFinished || _game.awaitingMove || _hopping != null) return;
+  Future<void> _roll() async {
+    if (!_canRoll) return;
     final mover = _game.current;
     final face = _game.roll(ref.read(randomProvider));
     Haptics.selection(ref);
     setState(() {
-      if (_game.stuck) {
-        _strip = '${widget.config.nameOf(mover)} rolled $face — no move';
-      } else {
-        final moves = _game.legalMoves();
-        _strip = moves.length == 1
-            ? 'Rolled $face — tap the token'
-            : 'Rolled $face — pick a token';
-      }
+      _rollingSeat = mover;
+      _strip = '${widget.config.nameOf(mover)} is rolling';
     });
+
+    _rollTimer?.cancel();
+    final settled = Completer<void>();
+    _rollTimer = Timer(motionReduced ? Duration.zero : PlayLudoScreen.rollSpin, () {
+      if (!mounted) return;
+      final forced = _game.forcedMove;
+      setState(() {
+        _rollingSeat = -1;
+        _lastFace[mover] = face;
+        if (_game.stuck) {
+          _strip = '${widget.config.nameOf(mover)} rolled $face — no move';
+        } else if (forced != null) {
+          _strip = 'Rolled $face';
+        } else {
+          _strip = 'Rolled $face — pick a token';
+        }
+      });
+      settled.complete();
+    });
+    await settled.future;
+    if (!mounted) return;
+    // Exactly one token can use the roll: there is no decision to make, so it
+    // plays itself rather than asking for a tap that can only mean one thing.
+    final forced = _game.forcedMove;
+    if (forced != null) await _playMove(forced);
   }
 
   Future<void> _tapToken(int token) async {
-    if (!_game.awaitingMove || _hopping != null) return;
+    if (!_game.awaitingMove || _hopping != null || _rollingSeat >= 0) return;
     final move = _game.legalMoves().where((m) => m.token == token).firstOrNull;
     if (move == null) return;
+    await _playMove(move);
+  }
 
+  Future<void> _playMove(LudoMove move) async {
+    final token = move.token;
     final mover = _game.current;
     final path = LudoLayout.pathBetween(mover, move.from, move.to, move.token);
     final turn = _game.play(move);
@@ -128,8 +182,10 @@ class _PlayLudoScreenState extends ConsumerState<PlayLudoScreen>
       _hopping = (mover, token);
       _hopPath = path;
     });
-    await play(MotionPreset.move,
-        duration: Motion.quick * math.max(1, path.length).clamp(1, 8));
+    await play(
+      MotionPreset.move,
+      duration: Motion.quick * math.max(1, path.length).clamp(1, 8),
+    );
     if (!mounted) return;
     setState(() {
       _hopping = null;
@@ -145,7 +201,28 @@ class _PlayLudoScreenState extends ConsumerState<PlayLudoScreen>
         _strip = '${widget.config.nameOf(_game.current)}\'s turn — roll';
       }
     });
+    await _popBadgeAt(LudoLayout.cellOf(mover, turn.move.to, token));
     if (!turn.playerFinished) _pulseIfWaiting();
+  }
+
+  /// A stack that gained or lost a token pops its badge once, after the pin has
+  /// finished travelling — the two beats never overlap.
+  Future<void> _popBadgeAt(Offset cell) async {
+    if (motionReduced || _stackAt(cell) < 3) return;
+    setState(() => _poppedBadge = cell);
+    await play(MotionPreset.pop);
+    if (mounted) setState(() => _poppedBadge = null);
+  }
+
+  /// How many of the current mover's tokens share [cell].
+  int _stackAt(Offset cell) {
+    var n = 0;
+    for (var p = 0; p < _seats.length; p++) {
+      for (var i = 0; i < 4; i++) {
+        if (LudoLayout.cellOf(p, _game.tokens[p][i], i) == cell) n++;
+      }
+    }
+    return n;
   }
 
   /// Keeps the movable-token highlight breathing while a tap is awaited.
@@ -170,11 +247,7 @@ class _PlayLudoScreenState extends ConsumerState<PlayLudoScreen>
       outcome: winner == 0 ? SessionOutcome.won : SessionOutcome.lost,
       configLabel: widget.config.configLabel,
       score: _game.homeCount(0),
-      extras: {
-        'winnerSeat': winner,
-        'seat${winner + 1}Wins': 1,
-        'captures': _captures,
-      },
+      extras: {'winnerSeat': winner, 'seat${winner + 1}Wins': 1, 'captures': _captures},
     );
   }
 
@@ -187,15 +260,29 @@ class _PlayLudoScreenState extends ConsumerState<PlayLudoScreen>
       title: 'Ludo',
       configLine: widget.config.label,
       timeLabel: '',
-      onHowToPlay: () => openHowTo(context, ref,
-          moduleId: widget.moduleId, subtitle: widget.config.label),
+      onHowToPlay: () => openHowTo(
+        context,
+        ref,
+        moduleId: widget.moduleId,
+        subtitle: widget.config.label,
+      ),
+      extraRows: [
+        ?stylePickerRow(
+          context,
+          ref,
+          module: _module,
+          previewBuilder: (context, id) =>
+              TokenStylePreview(styleId: id, seats: widget.config.playerCount),
+        ),
+        const LudoDicePositionRow(),
+      ],
     );
     if (!mounted) return;
     switch (result) {
       case PauseResult.restart:
         setState(_reset);
       case PauseResult.exit:
-        if (mounted) context.pop();
+        await leaveGame(context, progressSaved: false, ended: _game.isFinished);
       case PauseResult.resume:
       case null:
         if (wasRunning && !_game.isFinished) startClock();
@@ -215,18 +302,17 @@ class _PlayLudoScreenState extends ConsumerState<PlayLudoScreen>
     return Offset.lerp(_hopPath[index], _hopPath[next], (t - index).clamp(0, 1))!;
   }
 
-  Set<int> get _movable =>
-      _game.awaitingMove && _hopping == null
-          ? {for (final m in _game.legalMoves()) m.token}
-          : const {};
+  Set<int> get _movable => _game.awaitingMove && _hopping == null
+      ? {for (final m in _game.legalMoves()) m.token}
+      : const {};
 
   void _tapBoard(Offset local, double side) {
     final cell = side / LudoLayout.gridSize;
     var best = -1;
     var bestDistance = cell * 0.9;
     for (final token in _movable) {
-      final centre = LudoLayout.cellOf(
-              _game.current, _game.tokens[_game.current][token], token) *
+      final centre =
+          LudoLayout.cellOf(_game.current, _game.tokens[_game.current][token], token) *
           cell;
       final d = (local - centre).distance;
       if (d < bestDistance) {
@@ -237,69 +323,160 @@ class _PlayLudoScreenState extends ConsumerState<PlayLudoScreen>
     if (best >= 0) _tapToken(best);
   }
 
+  GameModule get _module => ref.read(gameByIdProvider(widget.moduleId))!;
+
+  /// The live game, so a widget test can assert on turn state without
+  /// re-deriving the rules.
+  @visibleForTesting
+  LudoGame get gameForTest => _game;
+
+  /// Whose turn the *screen* is showing. While the faces cycle that is still
+  /// the roller, even though a dead roll has already passed the turn on in the
+  /// core — otherwise the animation would finish in the next player's seat.
+  int get _activeSeat => _rollingSeat >= 0 ? _rollingSeat : _game.current;
+
+  bool get _canRoll =>
+      !_game.isFinished && !_game.awaitingMove && _hopping == null && _rollingSeat < 0;
+
+  /// The die slot state for [seat], straight off the turn. A seat that is not
+  /// on turn holds its last roll, spent — or is empty if it has not rolled yet.
+  DieSlotState _slotState(int seat) {
+    if (_game.isFinished || seat != _activeSeat) {
+      return _lastFace[seat] == null ? DieSlotState.idle : DieSlotState.used;
+    }
+    if (_rollingSeat == seat) return DieSlotState.rolling;
+    if (_hopping != null) return DieSlotState.used;
+    if (_game.awaitingMove) return DieSlotState.rolled;
+    return DieSlotState.rollable;
+  }
+
+  /// The face [seat] shows: the live die while it is their turn, otherwise the
+  /// last one they rolled.
+  int? _slotValue(int seat) =>
+      !_game.isFinished && seat == _activeSeat ? _game.die : _lastFace[seat];
+
+  /// A seat's name, falling back to its colour word rather than "Player 2".
+  String _nameOf(int seat) {
+    final given = widget.config.nameOf(seat).trim();
+    return given.isEmpty ? _seats[seat].name : given;
+  }
+
+  /// The seat marker for [seat], or null when nobody is sitting there — a
+  /// three-player game leaves the fourth corner empty.
+  Widget? _seatMarker(int seat, {required bool perSeatDice}) {
+    if (seat >= widget.config.playerCount) return null;
+    final identity = _seats[seat];
+    return LudoSeat(
+      identity: identity,
+      name: _nameOf(seat),
+      home: _game.homeCount(seat),
+      active: !_game.isFinished && seat == _activeSeat,
+      dieSlot: !perSeatDice
+          ? null
+          : GameDie(
+              state: _slotState(seat),
+              value: _slotValue(seat),
+              tint: identity.color,
+              size: 42,
+              onRoll: seat == _activeSeat && _canRoll ? _roll : null,
+            ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
     final finished = _game.isFinished;
+    final perSeatDice = ref.watch(
+      settingsControllerProvider.select((s) => s.ludoDieFollowsTurn),
+    );
+    final tokenStyle = tokenStyleFromId(styleIdFor(ref, _module));
+
+    // Seats sit at the screen corner matching their yard: 0 top-left,
+    // 1 top-right, 2 bottom-right, 3 bottom-left.
+    Widget? seat(int i) => _seatMarker(i, perSeatDice: perSeatDice);
+
     return GameScaffold(
       onOverflow: _openPause,
-      onExitRequested: () async {
-        final leave = await showExitConfirm(context, ref, progressSaved: false);
-        if (leave && context.mounted) context.pop();
-      },
-      statusBar: PlayerStrip(
-        identities: _seats,
-        names: [
-          for (var i = 0; i < widget.config.playerCount; i++) widget.config.nameOf(i)
-        ],
-        activeIndex: finished ? -1 : _game.current,
-        valueOf: (i) => '${_game.homeCount(i)}/4',
-      ),
+      ended: finished,
+      progressSaved: false,
+      statusBar: LudoSeatRow(left: seat(0), right: seat(1)),
       board: LayoutBuilder(
         builder: (context, constraints) {
           final side = math.min(constraints.maxWidth, constraints.maxHeight);
-          return GestureDetector(
-            onTapUp: (d) => _tapBoard(d.localPosition, side),
-            child: SizedBox.square(
-              dimension: side,
-              child: CustomPaint(
-                painter: LudoPainter(
-                  game: _game,
-                  identities: _seats,
-                  ink: t.textPrimary,
-                  border: t.border,
-                  surface: t.surface,
-                  surfaceAlt: t.surfaceAlt,
-                  accent: t.accent,
-                  movable: _movable,
-                  animating: _hopping,
-                  animatedCell: _animatedCell,
-                  pulse: motionPreset == MotionPreset.pulse ? motionEased : 0.5,
+          // Fill the slot and centre the square in it, so the slack splits
+          // evenly: the same air above the board as below it.
+          return SizedBox.expand(
+            child: Center(
+              child: SizedBox.square(
+                dimension: side,
+                child: GestureDetector(
+                  onTapUp: (d) => _tapBoard(d.localPosition, side),
+                  child: CustomPaint(
+                    painter: LudoPainter(
+                      game: _game,
+                      identities: _seats,
+                      ink: t.textPrimary,
+                      border: t.border,
+                      surface: t.surface,
+                      surfaceAlt: t.surfaceAlt,
+                      accent: t.accent,
+                      movable: _movable,
+                      animating: _hopping,
+                      animatedCell: _animatedCell,
+                      pulse: motionPreset == MotionPreset.pulse ? motionEased : 0.5,
+                      tokenStyle: tokenStyle,
+                      poppedBadge: _poppedBadge,
+                      badgePop: motionPreset == MotionPreset.pop
+                          ? motionEased.popScale()
+                          : 1,
+                    ),
+                  ),
                 ),
               ),
             ),
           );
         },
       ),
+      // Seats sit at the edges of the screen and the board takes everything
+      // left over — reserving a fixed slab for them shrank the board on a small
+      // phone for no reason.
       controls: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Gap(Insets.s4),
+          // Matches the gap the scaffold puts above the board, so the board
+          // sits with the same air on both sides of it.
+          const Gap(Insets.s6),
+          // The other two corners. Nothing is drawn when neither seat is taken,
+          // so a two-player game keeps the space for the board.
+          if (widget.config.playerCount > 2)
+            Padding(
+              padding: const EdgeInsets.only(bottom: Insets.s3),
+              child: LudoSeatRow(left: seat(3), right: seat(2)),
+            ),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (_game.die != null) ...[
-                DieChip(value: _game.die!, style: DiceStyle.classic, size: 34),
+              if (!perSeatDice && !finished) ...[
+                GameDie(
+                  state: _slotState(_activeSeat),
+                  value: _slotValue(_activeSeat),
+                  tint: _seats[_activeSeat].color,
+                  size: 54,
+                  onRoll: _canRoll ? _roll : null,
+                ),
                 const Gap.h(Insets.s3),
               ],
               Flexible(
-                child: Text(_strip,
-                    textAlign: TextAlign.center,
-                    style: DallyType.body.copyWith(
-                      fontSize: 14,
-                      color: finished ? t.textPrimary : t.textMuted,
-                    )),
+                child: Text(
+                  _strip,
+                  textAlign: TextAlign.center,
+                  style: DallyType.body.copyWith(
+                    fontSize: 14,
+                    color: finished ? t.textPrimary : t.textMuted,
+                  ),
+                ),
               ),
             ],
           ),
@@ -307,12 +484,11 @@ class _PlayLudoScreenState extends ConsumerState<PlayLudoScreen>
           if (finished) ...[
             PrimaryPill(label: 'Play again', onPressed: () => setState(_reset)),
             const Gap(Insets.s2 + 2),
-            PrimaryPill.secondary(label: 'Back to games', onPressed: () => context.pop()),
-          ] else
-            PrimaryPill(
-              label: _game.awaitingMove ? 'Tap a token' : 'Roll',
-              onPressed: _game.awaitingMove ? () {} : _roll,
+            PrimaryPill.secondary(
+              label: 'Back to games',
+              onPressed: () => leaveGame(context, ended: true),
             ),
+          ],
         ],
       ),
     );

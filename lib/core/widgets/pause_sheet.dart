@@ -166,8 +166,7 @@ enum PauseResult { resume, restart, exit }
 /// sheet. Returns true if the player chose to leave. [progressSaved] tailors the
 /// copy: resumable games reassure, others warn.
 Future<bool> showExitConfirm(
-  BuildContext context,
-  WidgetRef ref, {
+  BuildContext context, {
   required bool progressSaved,
 }) async {
   final t = context.tokens;

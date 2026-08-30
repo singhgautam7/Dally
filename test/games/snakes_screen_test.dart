@@ -1,3 +1,4 @@
+import 'package:dally/core/widgets/die_view.dart';
 import 'package:dally/features/games/snakes_and_ladders/snakes_config.dart';
 import 'package:dally/features/games/snakes_and_ladders/ui/play_snakes_screen.dart';
 import 'package:flutter/material.dart';
@@ -19,7 +20,8 @@ void main() {
     testWidgets('a $side×$side board lays out on a small phone', (tester) async {
       await pumpGameScreen(tester, screen(side, 4), size: const Size(320, 568));
       expect(tester.takeException(), isNull);
-      expect(find.text('Roll'), findsOneWidget);
+      // Tapping the die is the roll; there is no separate Roll button.
+      expect(find.byType(GameDie), findsOneWidget);
     });
   }
 
@@ -27,9 +29,9 @@ void main() {
       (tester) async {
     await pumpGameScreen(tester, screen(6, 2));
     for (var i = 0; i < 200; i++) {
-      final roll = find.text('Roll');
-      if (roll.evaluate().isEmpty) break;
-      await tester.tap(roll);
+      final die = find.byType(GameDie);
+      if (die.evaluate().isEmpty) break;
+      await tester.tap(die);
       await tester.pumpAndSettle();
     }
     expect(tester.takeException(), isNull);

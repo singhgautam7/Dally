@@ -102,11 +102,33 @@ void main() {
       expect(build(3), isNot(build(4)));
     });
 
-    test('a board stays legible — few enough links to read', () {
-      for (var seed = 0; seed < 20; seed++) {
+    test('the counts match the design: 7 ladders and 8 snakes on a 10×10', () {
+      expect(linkCountsFor(100), (ladders: 7, snakes: 8));
+      for (var seed = 0; seed < 30; seed++) {
         final links = generateLinks(DallyRandom.seeded(seed), columns: 10, rows: 10);
-        expect(links.length, inInclusiveRange(4, 10),
-            reason: 'seed $seed drew ${links.length} links on a 10x10');
+        expect(links.where((l) => l.isLadder).length, 7, reason: 'seed $seed');
+        expect(links.where((l) => !l.isLadder).length, 8, reason: 'seed $seed');
+      }
+    });
+
+    test('every size fills its quota', () {
+      for (final (c, r) in const [(6, 6), (8, 8), (10, 10), (12, 12)]) {
+        final want = linkCountsFor(c * r);
+        for (var seed = 0; seed < 20; seed++) {
+          final links = generateLinks(DallyRandom.seeded(seed), columns: c, rows: r);
+          expect(links, hasLength(want.ladders + want.snakes),
+              reason: 'seed $seed on ${c}x$r');
+        }
+      }
+    });
+
+    test('one long snake starts in the top row and drops to the bottom two', () {
+      for (var seed = 0; seed < 40; seed++) {
+        final links = generateLinks(DallyRandom.seeded(seed), columns: 10, rows: 10);
+        final long = links.where(
+            (l) => !l.isLadder && l.from >= 91 && l.from <= 100 && l.to <= 20);
+        expect(long, hasLength(1),
+            reason: 'seed $seed has no 91–100 → 1–20 snake');
       }
     });
 
@@ -126,11 +148,13 @@ void main() {
       }
     });
 
-    test('every link spans two to four rows and points the right way', () {
+    test('every ordinary link spans two to four rows and points the right way', () {
       for (var seed = 0; seed < 40; seed++) {
         final links = generateLinks(DallyRandom.seeded(seed), columns: 10, rows: 10);
         expect(links, isNotEmpty);
         for (final l in links) {
+          // The one long snake is exempt: crossing the board is its whole job.
+          if (!l.isLadder && l.from >= 91 && l.to <= 20) continue;
           final fromRow = (l.from - 1) ~/ 10;
           final toRow = (l.to - 1) ~/ 10;
           expect((toRow - fromRow).abs(), inInclusiveRange(2, 4),

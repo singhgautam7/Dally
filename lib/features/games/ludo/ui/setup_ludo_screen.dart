@@ -29,6 +29,7 @@ class _SetupLudoScreenState extends ConsumerState<SetupLudoScreen> {
   int _playerCount = 4;
   bool _sixToLeaveBase = true;
   bool _extraTurnOnSix = true;
+  bool _threeSixesForfeit = true;
   bool _exactFinish = true;
 
   late final List<TextEditingController> _names =
@@ -62,6 +63,7 @@ class _SetupLudoScreenState extends ConsumerState<SetupLudoScreen> {
         rules: LudoRules(
           sixToLeaveBase: _sixToLeaveBase,
           extraTurnOnSix: _extraTurnOnSix,
+          threeSixesForfeit: _threeSixesForfeit,
           exactFinish: _exactFinish,
         ),
         // Who starts is a fair draw, not always the top seat.
@@ -126,9 +128,15 @@ class _SetupLudoScreenState extends ConsumerState<SetupLudoScreen> {
               ),
               DallyToggle(
                 title: 'Roll again on a six',
-                subtitle: 'Three in a row forfeits the turn',
+                subtitle: 'A six earns another roll',
                 value: _extraTurnOnSix,
                 onChanged: (v) => setState(() => _extraTurnOnSix = v),
+              ),
+              DallyToggle(
+                title: 'Three sixes forfeit',
+                subtitle: 'A third six passes the turn on',
+                value: _threeSixesForfeit,
+                onChanged: (v) => setState(() => _threeSixesForfeit = v),
               ),
               DallyToggle(
                 title: 'Exact count to finish',

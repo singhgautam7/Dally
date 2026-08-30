@@ -43,19 +43,32 @@ class _PlayRandomChoiceScreenState extends ConsumerState<PlayRandomChoiceScreen>
     }
   }
 
+  /// Usage is recorded on the way out — in `deactivate`, not `dispose`:
+  /// reading a provider from an element that is already unmounted is
+  /// unsafe, and this screen only ever writes one session.
+  bool _sessionRecorded = false;
+
+  @override
+  void deactivate() {
+    if (!_sessionRecorded) {
+      _sessionRecorded = true;
+      if (_picks > 0) {
+        recordSession(
+          ref,
+          gameId: widget.module.id,
+          startedAt: _openedAt,
+          durationSeconds: DateTime.now().difference(_openedAt).inSeconds,
+          outcome: SessionOutcome.completed,
+          extras: {'picks': _picks, 'options': _options.length},
+        );
+      }
+    }
+    super.deactivate();
+  }
+
   @override
   void dispose() {
     _input.dispose();
-    if (_picks > 0) {
-      recordSession(
-        ref,
-        gameId: widget.module.id,
-        startedAt: _openedAt,
-        durationSeconds: DateTime.now().difference(_openedAt).inSeconds,
-        outcome: SessionOutcome.completed,
-        extras: {'picks': _picks, 'options': _options.length},
-      );
-    }
     super.dispose();
   }
 

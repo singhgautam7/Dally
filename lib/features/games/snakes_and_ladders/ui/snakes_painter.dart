@@ -21,6 +21,7 @@ class SnakesPainter extends CustomPainter {
     required this.surfaceAlt,
     required this.textFaint,
     required this.animatedPositions,
+    required this.tokenStyle,
     this.linkAnim,
   });
 
@@ -35,6 +36,9 @@ class SnakesPainter extends CustomPainter {
   /// Drawn positions per seat, in *square* units and fractional, so a token can
   /// be shown mid-walk. The game state has already moved on.
   final List<double> animatedPositions;
+
+  /// Pawn (default) or the bare identity shape, chosen in the pause sheet.
+  final PlayerTokenStyle tokenStyle;
 
   /// A seat riding a link: drawn straight along the ladder or snake rather
   /// than crawling the serpentine numbering.
@@ -164,6 +168,8 @@ class SnakesPainter extends CustomPainter {
         _cell * 0.24,
         ring: surface,
         ringWidth: math.max(1, _cell * 0.04),
+        style: tokenStyle,
+        knockout: surface,
       );
     }
   }

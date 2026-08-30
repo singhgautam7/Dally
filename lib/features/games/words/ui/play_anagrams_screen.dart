@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/app_providers.dart';
 import '../../../../core/game/how_to_launcher.dart';
@@ -9,6 +8,7 @@ import '../../../../core/theme/dally_tokens.dart';
 import '../../../../core/theme/motion.dart';
 import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/type_scale.dart';
+import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/widgets/game_scaffold.dart';
 import '../../../../core/widgets/pause_sheet.dart';
 import '../../../../core/widgets/primary_pill.dart';
@@ -147,7 +147,7 @@ class _PlayAnagramsScreenState extends ConsumerState<PlayAnagramsScreen>
       case PauseResult.restart:
         setState(() => _startSession(_list!));
       case PauseResult.exit:
-        if (mounted) context.pop();
+        await leaveGame(context, progressSaved: false, ended: sessionOver);
       case PauseResult.resume:
       case null:
         break;
@@ -172,10 +172,8 @@ class _PlayAnagramsScreenState extends ConsumerState<PlayAnagramsScreen>
 
     return GameScaffold(
       onOverflow: _openPause,
-      onExitRequested: () async {
-        final leave = await showExitConfirm(context, ref, progressSaved: false);
-        if (leave && context.mounted) context.pop();
-      },
+      ended: done,
+      progressSaved: false,
       statusBar: WordStatusBar(
         round: round + 1,
         rounds: widget.config.rounds,
@@ -241,7 +239,9 @@ class _PlayAnagramsScreenState extends ConsumerState<PlayAnagramsScreen>
                 label: 'Play again',
                 onPressed: () => setState(() => _startSession(_list!))),
             const Gap(Insets.s2 + 2),
-            PrimaryPill.secondary(label: 'Back to games', onPressed: () => context.pop()),
+            PrimaryPill.secondary(
+                label: 'Back to games',
+                onPressed: () => leaveGame(context, ended: true)),
           ] else if (roundOver)
             PrimaryPill(label: 'Next word', onPressed: () => setState(_nextRound))
           else ...[

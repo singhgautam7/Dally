@@ -7,6 +7,7 @@ import '../../../../core/app_providers.dart';
 import '../../../../core/game/game_module.dart';
 import '../../../../core/game/session_recorder.dart';
 import '../../../../core/services/haptics.dart';
+import '../../../../core/services/sfx.dart';
 import '../../../../core/storage/game_session.dart';
 import '../../../../core/theme/dally_tokens.dart';
 import '../../../../core/theme/motion.dart';
@@ -46,22 +47,35 @@ class _PlayDiceScreenState extends ConsumerState<PlayDiceScreen>
   bool _rolling = false;
   final List<Timer> _timers = [];
 
+  /// Usage is recorded on the way out — in `deactivate`, not `dispose`:
+  /// reading a provider from an element that is already unmounted is
+  /// unsafe, and this screen only ever writes one session.
+  bool _sessionRecorded = false;
+
+  @override
+  void deactivate() {
+    if (!_sessionRecorded) {
+      _sessionRecorded = true;
+      if (_rolls > 0) {
+        recordSession(
+          ref,
+          gameId: widget.module.id,
+          startedAt: _openedAt,
+          durationSeconds: DateTime.now().difference(_openedAt).inSeconds,
+          outcome: SessionOutcome.completed,
+          extras: {'rolls': _rolls, 'dice': _count},
+        );
+      }
+    }
+    super.deactivate();
+  }
+
   @override
   void dispose() {
     for (final t in _timers) {
       t.cancel();
     }
     _countUp.dispose();
-    if (_rolls > 0) {
-      recordSession(
-        ref,
-        gameId: widget.module.id,
-        startedAt: _openedAt,
-        durationSeconds: DateTime.now().difference(_openedAt).inSeconds,
-        outcome: SessionOutcome.completed,
-        extras: {'rolls': _rolls, 'dice': _count},
-      );
-    }
     super.dispose();
   }
 
@@ -72,6 +86,7 @@ class _PlayDiceScreenState extends ConsumerState<PlayDiceScreen>
     final rng = ref.read(randomProvider);
     final values = rollDice(rng, count: _count);
     _rolls++;
+    Sounds.play(ref, Sfx.diceRoll);
 
     if (reduceMotionOf(context)) {
       setState(() {

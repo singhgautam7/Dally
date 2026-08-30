@@ -141,10 +141,7 @@ class _PlayDotsScreenState extends ConsumerState<PlayDotsScreen>
     final t = context.tokens;
     return GameScaffold(
       onOverflow: _openPause,
-      onExitRequested: () async {
-        final leave = await showExitConfirm(context, ref, progressSaved: false);
-        if (leave && context.mounted) context.pop();
-      },
+      ended: _game.isFinished,
       statusBar: _ScoreRow(
         game: _game,
         config: widget.config,

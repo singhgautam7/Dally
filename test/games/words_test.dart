@@ -1,6 +1,5 @@
 import 'package:dally/core/util/dally_random.dart';
 import 'package:dally/features/games/words/logic/anagrams.dart';
-import 'package:dally/features/games/words/logic/word_guess.dart';
 import 'package:dally/features/games/words/logic/word_list.dart';
 import 'package:dally/features/games/words/logic/word_search.dart';
 import 'package:flutter/services.dart';
@@ -58,98 +57,6 @@ void main() {
       expect(hard, isNotEmpty);
       expect(easy.toSet().intersection(hard.toSet()), isEmpty,
           reason: 'the two bands do not overlap in length');
-    });
-  });
-
-  group('word guess marking', () {
-    test('an exact guess is all correct', () {
-      expect(markGuess('house', 'house'),
-          everyElement(LetterMark.correct));
-    });
-
-    test('a letter in the wrong place is present', () {
-      // Nothing in "short" is in the right place for "horse", but four of its
-      // five letters are somewhere in it.
-      expect(markGuess('short', 'horse'), [
-        LetterMark.present, // s
-        LetterMark.present, // h
-        LetterMark.present, // o
-        LetterMark.present, // r
-        LetterMark.absent, // t
-      ]);
-    });
-
-    test('a repeated guess letter only claims what is left', () {
-      // "geese" against "hedge": two e's land exactly, and the third has
-      // nothing left to claim once they have — it is absent, not present.
-      final marks = markGuess('geese', 'hedge');
-      expect(marks, [
-        LetterMark.present, // g
-        LetterMark.correct, // e
-        LetterMark.absent, // e — both of the answer's e's are already claimed
-        LetterMark.absent, // s
-        LetterMark.correct, // e
-      ]);
-    });
-
-    test('a doubled guess against a single answer letter marks only one', () {
-      final marks = markGuess('sells', 'slice');
-      expect(marks.where((m) => m != LetterMark.absent).length, 3,
-          reason: 's, e and one l are in "slice"');
-    });
-  });
-
-  group('word guess play', () {
-    WordGuessGame make({String answer = 'house', Set<String>? words}) =>
-        WordGuessGame(
-          answer: answer,
-          isWord: (w) => (words ?? {'house', 'mouse', 'crane', 'stone'}).contains(w),
-        );
-
-    test('a wrong-length guess is refused and costs nothing', () {
-      final g = make();
-      expect(g.guess('cat'), GuessRejection.wrongLength);
-      expect(g.guesses, isEmpty);
-      expect(g.triesLeft, 6);
-    });
-
-    test('a non-word is refused and costs nothing', () {
-      final g = make();
-      expect(g.guess('zzzzz'), GuessRejection.notAWord);
-      expect(g.triesLeft, 6);
-    });
-
-    test('a valid guess spends a try', () {
-      final g = make();
-      expect(g.guess('crane'), isNull);
-      expect(g.triesLeft, 5);
-      expect(g.isOver, isFalse);
-    });
-
-    test('the right word wins', () {
-      final g = make();
-      g.guess('house');
-      expect(g.isWon, isTrue);
-      expect(g.isOver, isTrue);
-      expect(g.guess('crane'), GuessRejection.alreadyOver);
-    });
-
-    test('running out of tries loses', () {
-      final g = make();
-      for (var i = 0; i < 6; i++) {
-        g.guess('crane');
-      }
-      expect(g.isLost, isTrue);
-      expect(g.isWon, isFalse);
-    });
-
-    test('the keyboard keeps the best mark seen for a letter', () {
-      final g = make(answer: 'house');
-      g.guess('stone'); // s present, o present, e correct
-      g.guess('mouse'); // o correct
-      expect(g.keyboardMarks['o'], LetterMark.correct);
-      expect(g.keyboardMarks['t'], LetterMark.absent);
-      expect(g.keyboardMarks['e'], LetterMark.correct);
     });
   });
 

@@ -4,12 +4,10 @@ import 'dart:math' as math;
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/storage/game_session.dart';
 import '../../../../core/game/game_registry.dart';
 import '../../../../core/game/session_recorder.dart';
-import '../../../../core/routing/routes.dart';
 import '../../../../core/game/how_to_launcher.dart';
 import '../../../../core/app_providers.dart';
 import '../../../../core/services/haptics.dart';
@@ -18,6 +16,7 @@ import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../../../../core/theme/type_scale.dart';
 import '../../../../core/util/format.dart';
+import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/widgets/game_scaffold.dart';
 import '../../../../core/widgets/pause_sheet.dart';
 import '../../../../core/widgets/style_picker_sheet.dart';
@@ -355,10 +354,8 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen> with WidgetsB
     }
   }
 
-  Future<void> _confirmExit() async {
-    final leave = await showExitConfirm(context, ref, progressSaved: _outcomeText == null);
-    if (leave && mounted) context.go(Routes.home);
-  }
+  Future<void> _confirmExit() =>
+      leaveGame(context, ended: _outcomeText != null, progressSaved: false);
 
   @override
   Widget build(BuildContext context) {
@@ -371,7 +368,8 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen> with WidgetsB
 
     return GameScaffold(
       onOverflow: _openPause,
-      onExitRequested: _confirmExit,
+      ended: _outcomeText != null,
+      progressSaved: false,
       statusBar: _PlayerBar(
         side: topSide,
         p1White: _p1White,
@@ -425,7 +423,7 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen> with WidgetsB
           : Padding(
               padding: const EdgeInsets.only(top: Insets.s3),
               child: _outcomeText != null
-                  ? _OutcomeOverlay(text: _outcomeText!, onRematch: _restart, onExit: () => context.go(Routes.home))
+                  ? _OutcomeOverlay(text: _outcomeText!, onRematch: _restart, onExit: () => leaveGame(context, ended: true))
                   : _BottomStatus(
                       pos: _pos, outcome: _outcomeText, config: widget.config.label,
                       history: _history, materialDiff: mat.diff),

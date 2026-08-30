@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/app_providers.dart';
 import '../../../../core/game/game_module.dart';
@@ -14,6 +13,7 @@ import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/type_scale.dart';
 import '../../../../core/util/format.dart';
 import '../../../../core/util/game_clock.dart';
+import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/widgets/game_scaffold.dart';
 import '../../../../core/widgets/pause_sheet.dart';
 import '../../../../core/widgets/primary_pill.dart';
@@ -56,6 +56,13 @@ class _PlaySolitaireScreenState extends ConsumerState<PlaySolitaireScreen>
   (List<PlayingCard>, Offset, Offset)? _flight;
   CardRef? _rejected;
 
+  /// The run under the finger: where it came from, what is travelling, the
+  /// offset between the finger and the run's top-left, and where it is now.
+  (CardRef from, List<PlayingCard> cards, Offset grab, Offset at)? _drag;
+
+  /// 1 once the deal has finished playing out.
+  double _dealProgress = 1;
+
   @override
   bool get motionReduced => _reduceMotion;
   bool _reduceMotion = false;
@@ -87,34 +94,78 @@ class _PlaySolitaireScreenState extends ConsumerState<PlaySolitaireScreen>
     _busy = false;
     _flight = null;
     _rejected = null;
+    _drag = null;
     resetClock();
     startClock();
+    _playDeal();
+  }
+
+  /// The one long sequence in the game: 28 cards out of the stock, 28ms apart.
+  /// The board is already dealt underneath — this only animates their arrival,
+  /// so an interrupting tap simply lands on a finished table.
+  Future<void> _playDeal() async {
+    if (motionReduced) {
+      _dealProgress = 1;
+      return;
+    }
+    _dealProgress = 0;
+    await play(MotionPreset.appear,
+        duration: const Duration(milliseconds: 780),
+        onTick: () => setState(() => _dealProgress = motionValue));
+    if (mounted) setState(() => _dealProgress = 1);
   }
 
   SolitaireLayout get _layout => SolitaireLayout(_game, _boardSize);
 
+  /// The live game, so a widget test can rig a position and assert on the
+  /// result of a real drag rather than re-deriving the rules.
+  @visibleForTesting
+  Solitaire get gameForTest => _game;
+
   // ── Interaction ───────────────────────────────────────────────────────────
 
-  Future<void> _tap(Offset point) async {
+  /// The stock is the only tap on the table — every other card is dragged.
+  void _tap(Offset point) {
+    if (_busy || _game.isWon || _boardSize.isEmpty) return;
+    final hit = _layout.hitTest(point);
+    if (hit == null || hit.kind != PileKind.stock) return;
+    if (_game.draw()) {
+      Haptics.selection(ref);
+      setState(() {});
+    }
+  }
+
+  void _dragStart(Offset point) {
     if (_busy || _game.isWon || _boardSize.isEmpty) return;
     final layout = _layout;
-    final ref_ = layout.hitTest(point);
-    if (ref_ == null) return;
+    final from = layout.hitTest(point);
+    if (from == null || from.kind == PileKind.stock) return;
+    final cards = _game.movingCards(from);
+    if (cards.isEmpty) return;
+    final origin = layout.rectFor(from).topLeft;
+    setState(() => _drag = (from, cards, point - origin, origin));
+  }
 
-    if (ref_.kind == PileKind.stock) {
-      if (_game.draw()) {
-        Haptics.selection(ref);
-        setState(() {});
-      }
+  void _dragUpdate(Offset point) {
+    final held = _drag;
+    if (held == null) return;
+    setState(() => _drag = (held.$1, held.$2, held.$3, point - held.$3));
+  }
+
+  Future<void> _dragEnd() async {
+    final held = _drag;
+    if (held == null) return;
+    final layout = _layout;
+    // The drop is judged by where the run's own top-left landed, not the
+    // finger, so a card dropped visually on a pile counts as on that pile.
+    final centre = held.$4 + Offset(layout.cardWidth / 2, layout.cardHeight / 2);
+    final target = layout.dropTargetAt(centre);
+    setState(() => _drag = null);
+    if (target == null || !_game.canMove(held.$1, target.$1, target.$2)) {
+      await _reject(held.$1);
       return;
     }
-
-    final target = _game.autoTarget(ref_);
-    if (target == null) {
-      await _reject(ref_);
-      return;
-    }
-    await _moveWithFlight(ref_, target.$1, target.$2, layout);
+    await _moveWithFlight(held.$1, target.$1, target.$2, layout);
   }
 
   Future<void> _moveWithFlight(
@@ -226,7 +277,7 @@ class _PlaySolitaireScreenState extends ConsumerState<PlaySolitaireScreen>
       case PauseResult.restart:
         setState(_deal);
       case PauseResult.exit:
-        if (mounted) context.pop();
+        await leaveGame(context, progressSaved: false, ended: _game.isWon);
       case PauseResult.resume:
       case null:
         if (wasRunning && !_game.isWon) startClock();
@@ -239,12 +290,11 @@ class _PlaySolitaireScreenState extends ConsumerState<PlaySolitaireScreen>
     final style = cardStyleFromId(styleIdFor(ref, widget.module));
     final rejected = _rejected;
     final flight = _flight;
+    final held = _drag;
     return GameScaffold(
       onOverflow: _openPause,
-      onExitRequested: () async {
-        final leave = await showExitConfirm(context, ref, progressSaved: false);
-        if (leave && context.mounted) context.pop();
-      },
+      ended: _game.isWon,
+      progressSaved: false,
       // Scaled down rather than wrapped: three chips is one line on every phone.
       statusBar: FittedBox(
         fit: BoxFit.scaleDown,
@@ -279,14 +329,21 @@ class _PlaySolitaireScreenState extends ConsumerState<PlaySolitaireScreen>
           }
           return GestureDetector(
             onTapUp: (d) => _tap(d.localPosition),
+            onPanStart: (d) => _dragStart(d.localPosition),
+            onPanUpdate: (d) => _dragUpdate(d.localPosition),
+            onPanEnd: (_) => _dragEnd(),
+            // A cancelled drag (the gesture lost to another recogniser, or the
+            // pointer went away) must put the run back, or the card it was
+            // carrying stays painted in mid-air and vanishes from its pile.
+            onPanCancel: () {
+              if (_drag != null) setState(() => _drag = null);
+            },
             child: SizedBox.fromSize(
               size: size,
               child: CustomPaint(
                 painter: SolitairePainter(
                   game: _game,
                   style: style,
-                  ink: t.textPrimary,
-                  red: t.danger,
                   surface: t.surface,
                   surfaceAlt: t.surfaceAlt,
                   border: t.border,
@@ -302,6 +359,8 @@ class _PlaySolitaireScreenState extends ConsumerState<PlaySolitaireScreen>
                           motionPreset == MotionPreset.shake
                               ? motionEased.shakeOffset(amplitude: 6)
                               : 0),
+                  drag: held == null ? null : (held.$1, held.$2, held.$4),
+                  deal: _dealProgress,
                 ),
               ),
             ),
@@ -321,11 +380,12 @@ class _PlaySolitaireScreenState extends ConsumerState<PlaySolitaireScreen>
             PrimaryPill(label: 'New deal', onPressed: () => setState(_deal)),
             const Gap(Insets.s2 + 2),
             PrimaryPill.secondary(
-                label: 'Back to games', onPressed: () => context.pop()),
+                label: 'Back to games',
+                onPressed: () => leaveGame(context, ended: true)),
           ] else if (_game.canAutoComplete)
             PrimaryPill(label: 'Finish it', onPressed: _autoComplete)
           else
-            Text('Tap a card to send it home.',
+            Text('Drag a card onto the pile it belongs on.',
                 textAlign: TextAlign.center,
                 style: DallyType.body.copyWith(fontSize: 13, color: t.textFaint)),
         ],
@@ -348,9 +408,6 @@ class _CardPreview extends StatelessWidget {
       child: CustomPaint(
         painter: _PreviewPainter(
           style: cardStyleFromId(styleId),
-          ink: t.textPrimary,
-          red: t.danger,
-          surface: t.surface,
           border: t.border,
         ),
       ),
@@ -359,16 +416,10 @@ class _CardPreview extends StatelessWidget {
 }
 
 class _PreviewPainter extends CustomPainter {
-  _PreviewPainter({
-    required this.style,
-    required this.ink,
-    required this.red,
-    required this.surface,
-    required this.border,
-  });
+  _PreviewPainter({required this.style, required this.border});
 
   final CardStyle style;
-  final Color ink, red, surface, border;
+  final Color border;
 
   static const _sample = [PlayingCard(13, Suit.spades), PlayingCard(7, Suit.hearts)];
 
@@ -382,9 +433,6 @@ class _PreviewPainter extends CustomPainter {
         Rect.fromLTWH(i * size.width * 0.42, (size.height - height) / 2, width, height),
         _sample[i],
         style,
-        ink: ink,
-        red: red,
-        surface: surface,
         border: border,
       );
     }

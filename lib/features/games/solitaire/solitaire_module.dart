@@ -47,8 +47,8 @@ class SolitaireModule extends GameModule {
 
   @override
   List<StyleOption> get styleOptions => const [
-        StyleOption(id: 'glyph', label: 'Suit glyph', recommended: true),
-        StyleOption(id: 'numeral', label: 'Big numeral'),
+        StyleOption(id: 'classic', label: 'Classic', recommended: true),
+        StyleOption(id: 'minimal', label: 'Minimal'),
       ];
 
   @override

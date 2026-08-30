@@ -34,6 +34,7 @@ class LudoRules {
   const LudoRules({
     this.sixToLeaveBase = true,
     this.extraTurnOnSix = true,
+    this.threeSixesForfeit = true,
     this.extraTurnOnCapture = true,
     this.exactFinish = true,
   });
@@ -41,8 +42,12 @@ class LudoRules {
   /// A token only leaves the yard on a six. Off makes for much shorter games.
   final bool sixToLeaveBase;
 
-  /// A six is rolled again — capped at three in a row, which forfeits the turn.
+  /// A six is rolled again.
   final bool extraTurnOnSix;
+
+  /// Three sixes in a row forfeit the turn. Without it a lucky streak has no
+  /// ceiling, which is why the standard game caps it.
+  final bool threeSixesForfeit;
 
   final bool extraTurnOnCapture;
 
@@ -144,14 +149,21 @@ class LudoGame {
     die = face;
     _sixesInARow = face == 6 ? _sixesInARow + 1 : 0;
 
-    // Three sixes in a row forfeits the turn, tokens untouched. Without it a
-    // lucky streak never ends.
-    if (rules.extraTurnOnSix && _sixesInARow >= 3) {
+    // Three sixes in a row forfeits the turn, tokens untouched.
+    if (rules.extraTurnOnSix && rules.threeSixesForfeit && _sixesInARow >= 3) {
       _passTurn(keepDie: true);
       return face;
     }
     if (legalMoves().isEmpty) _passTurn(keepDie: true);
     return face;
+  }
+
+  /// The move to play when there is no choice to make: exactly one token can
+  /// use the roll. The screen plays it without asking, which is what stops a
+  /// single token in play needing a tap it can only answer one way.
+  LudoMove? get forcedMove {
+    final moves = legalMoves();
+    return moves.length == 1 ? moves.single : null;
   }
 
   /// Every move available to the player on turn with the current [die].
@@ -184,23 +196,26 @@ class LudoGame {
       }
     }
 
-    // A seat never stacks two of its own tokens on one square.
-    if (to != kHome && tokens[current].contains(to)) return null;
-
+    // Two of a seat's own tokens may share a square — the pair is what makes a
+    // six useful when the entry square is already occupied. Blocking a seat's
+    // own token out of the yard was the bug that made a six look wasted.
     return LudoMove(token: token, from: from, to: to, captured: _capturesAt(to));
   }
 
   /// Opponents standing on the ring square [to] lands on. Nothing is capturable
-  /// off the ring, and nothing on a safe square.
+  /// off the ring, nothing on a safe square, and — per the standard rules — a
+  /// seat's *pair* on one square protects both of them.
   List<(int, int)> _capturesAt(int to) {
     final ring = ringIndexOf(current, to);
     if (ring < 0 || kSafeRingSquares.contains(ring)) return const [];
     final hits = <(int, int)>[];
     for (var p = 0; p < playerCount; p++) {
       if (p == current) continue;
-      for (var i = 0; i < 4; i++) {
-        if (ringIndexOf(p, tokens[p][i]) == ring) hits.add((p, i));
-      }
+      final onSquare = <(int, int)>[
+        for (var i = 0; i < 4; i++)
+          if (ringIndexOf(p, tokens[p][i]) == ring) (p, i),
+      ];
+      if (onSquare.length == 1) hits.addAll(onSquare);
     }
     return hits;
   }

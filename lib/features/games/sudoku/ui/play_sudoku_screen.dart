@@ -2,11 +2,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/storage/game_session.dart';
 import '../../../../core/game/session_recorder.dart';
-import '../../../../core/routing/routes.dart';
 import '../../../../core/game/how_to_launcher.dart';
 import '../../../../core/app_providers.dart';
 import '../../../../core/services/haptics.dart';
@@ -16,6 +14,7 @@ import '../../../../core/theme/type_scale.dart';
 import '../../../../core/util/format.dart';
 import '../../../../core/util/game_clock.dart';
 import '../../../../core/widgets/circular_number_pad.dart';
+import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/widgets/game_scaffold.dart';
 import '../../../../core/widgets/pause_sheet.dart';
 import '../../../../core/widgets/primary_pill.dart';
@@ -232,10 +231,8 @@ class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
     _persist();
   }
 
-  Future<void> _confirmExit() async {
-    final leave = await showExitConfirm(context, ref, progressSaved: true);
-    if (leave && mounted) context.go(Routes.home);
-  }
+  Future<void> _confirmExit() =>
+      leaveGame(context, ended: _solved, progressSaved: true);
 
   @override
   Widget build(BuildContext context) {
@@ -243,7 +240,8 @@ class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
     if (_loading) {
       return GameScaffold(
         onOverflow: _openPause,
-        onExitRequested: _confirmExit,
+        ended: _solved,
+      progressSaved: true,
         statusBar: const SizedBox(height: 26),
         board: const _BoardSkeleton(),
       );
@@ -251,7 +249,8 @@ class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
     final conflicts = _conflicts;
     return GameScaffold(
       onOverflow: _openPause,
-      onExitRequested: _confirmExit,
+      ended: _solved,
+      progressSaved: true,
       statusBar: Center(
         child: Text(formatClock(_displaySeconds),
             style: DallyType.monoLg.copyWith(fontSize: 26, color: _solved ? t.success : t.textPrimary)),
@@ -268,7 +267,7 @@ class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
       controls: Padding(
         padding: const EdgeInsets.only(top: Insets.s4),
         child: _solved
-            ? _SolvedOverlay(time: formatClock(_displaySeconds), onAgain: _restart, onExit: () => context.go(Routes.home))
+            ? _SolvedOverlay(time: formatClock(_displaySeconds), onAgain: _restart, onExit: () => leaveGame(context, ended: true))
             : CircularNumberPad(
                 remaining: _remaining,
                 onDigit: _input,

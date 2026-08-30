@@ -2,11 +2,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/storage/game_session.dart';
 import '../../../../core/game/session_recorder.dart';
-import '../../../../core/routing/routes.dart';
 import '../../../../core/game/how_to_launcher.dart';
 import '../../../../core/app_providers.dart';
 import '../../../../core/services/haptics.dart';
@@ -17,6 +15,7 @@ import '../../../../core/theme/type_scale.dart';
 import '../../../../core/util/format.dart';
 import '../../../../core/util/game_clock.dart';
 import '../../../../core/widgets/board_chip.dart';
+import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/widgets/game_scaffold.dart';
 import '../../../../core/widgets/pause_sheet.dart';
 import '../../../../core/widgets/primary_pill.dart';
@@ -126,17 +125,16 @@ class _PlayFifteenScreenState extends ConsumerState<PlayFifteenScreen>
     }
   }
 
-  Future<void> _confirmExit() async {
-    final leave = await showExitConfirm(context, ref, progressSaved: false);
-    if (leave && mounted) context.go(Routes.home);
-  }
+  Future<void> _confirmExit() =>
+      leaveGame(context, ended: _solved, progressSaved: false);
 
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
     return GameScaffold(
       onOverflow: _openPause,
-      onExitRequested: _confirmExit,
+      ended: _solved,
+      progressSaved: false,
       statusBar: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -157,7 +155,7 @@ class _PlayFifteenScreenState extends ConsumerState<PlayFifteenScreen>
       controls: Padding(
         padding: const EdgeInsets.only(top: Insets.s4),
         child: _solved
-            ? _SolvedOverlay(moves: _board.moves, onAgain: _restart, onExit: () => context.go(Routes.home))
+            ? _SolvedOverlay(moves: _board.moves, onAgain: _restart, onExit: () => leaveGame(context, ended: true))
             : Column(
                 children: [
                   Text('$_inPlace in place',

@@ -25,7 +25,7 @@ class MinesweeperPainter extends CustomPainter {
     required this.style,
     required this.gameOver,
     required this.explodedIndex,
-    required this.reveal,
+    required this.cascade,
   });
 
   final MinesweeperBoard board;
@@ -34,8 +34,13 @@ class MinesweeperPainter extends CustomPainter {
   final bool gameOver;
   final int explodedIndex;
 
-  /// The reveal fraction (0..1) for a cascade fade-in of newly-opened cells.
-  final double reveal;
+  /// The cells opened by the last tap, keyed by how many rings out from it they
+  /// sit, plus how far the ripple has travelled (in rings). A cell fades in as
+  /// the ripple reaches it; everything not in the map is drawn as usual.
+  ///
+  /// Doing it here rather than as a widget per cell is what keeps a 30×16 clear
+  /// to one repaint.
+  final ({Map<int, int> ringOf, double front})? cascade;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -70,8 +75,24 @@ class MinesweeperPainter extends CustomPainter {
           Paint()..color = fill,
         );
 
+    final ripple = cascade;
+
+    /// 0 → not opened yet, 1 → fully drawn. Cells outside the ripple are 1.
+    double opened(int i) {
+      if (ripple == null) return 1;
+      final ring = ripple.ringOf[i];
+      if (ring == null) return 1;
+      return (ripple.front - ring).clamp(0.0, 1.0);
+    }
+
     for (var i = 0; i < board.cells; i++) {
       final revealed = board.reveal[i] == CellReveal.revealed;
+      final open = revealed ? opened(i) : 1.0;
+      // Not reached by the ripple yet: it still looks like a hidden tile.
+      if (revealed && open <= 0) {
+        drawTile(i, tokens.surfaceAlt);
+        continue;
+      }
 
       if (!revealed) {
         drawTile(i, tokens.surfaceAlt);
@@ -105,7 +126,15 @@ class MinesweeperPainter extends CustomPainter {
           bottomLeft: (!bottom && !left) ? rad : zero,
           bottomRight: (!bottom && !right) ? rad : zero,
         );
-        canvas.drawRRect(rrect, floodPaint);
+        if (open < 1) {
+          // Mid-ripple the tile is still under the flood, so the accent grows
+          // over it rather than appearing out of the board colour.
+          drawTile(i, tokens.surfaceAlt);
+          canvas.drawRRect(
+              rrect, Paint()..color = tokens.accent.withValues(alpha: open));
+        } else {
+          canvas.drawRRect(rrect, floodPaint);
+        }
         continue;
       }
 
@@ -114,7 +143,8 @@ class MinesweeperPainter extends CustomPainter {
       canvas.drawRect(rectOf(i).deflate(0.25), hairline);
       final colors = tokens.minesweeperNumbers;
       final color = colors[(board.count[i] - 1).clamp(0, colors.length - 1)];
-      _drawDigit(canvas, rectOf(i), board.count[i], color, cell);
+      _drawDigit(canvas, rectOf(i), board.count[i],
+          open < 1 ? color.withValues(alpha: open) : color, cell);
     }
   }
 

@@ -1,7 +1,12 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../theme/dally_tokens.dart';
+import '../theme/motion.dart';
 import '../theme/spacing.dart';
+import 'game_exit.dart';
 
 /// The shared game-screen chrome: a featherweight top row holding only the
 /// overflow (pause) button, a status-bar slot (chips, score cards, clock), a
@@ -10,15 +15,22 @@ import '../theme/spacing.dart';
 /// There is no title or back button on the board — the overflow raises the
 /// pause sheet, which carries "Back to games". Matches the boards in
 /// `Dally Games I.dc.html`.
-class GameScaffold extends StatefulWidget {
+///
+/// Back navigation is **not** a per-game decision: every game gets the same
+/// three-step behaviour from here (see [leaveGame]).
+class GameScaffold extends ConsumerStatefulWidget {
   const GameScaffold({
     super.key,
     required this.statusBar,
     required this.board,
     required this.onOverflow,
-    required this.onExitRequested,
     this.controls,
-    this.boardMaxHeightFactor = 0.82,
+    this.ended = false,
+    this.progressSaved = false,
+    this.fillControls = false,
+    this.onPanStart,
+    this.onPanUpdate,
+    this.onPanEnd,
   });
 
   /// Score cards / stat chips / clock row shown just under the top bar.
@@ -36,81 +48,127 @@ class GameScaffold extends StatefulWidget {
   /// Opens the pause sheet.
   final VoidCallback onOverflow;
 
-  /// Asks to leave the game (shows the exit-confirm sheet and pops on yes). The
-  /// system back button routes here once the pause sheet has been seen.
-  final VoidCallback onExitRequested;
+  /// True once the game has an end state on screen. Back then goes straight
+  /// home: there is nothing left to confirm losing.
+  final bool ended;
 
-  /// Reserved for future use by boards that want to cap their height.
-  final double boardMaxHeightFactor;
+  /// Whether leaving mid-game keeps the board — only changes the confirm copy.
+  final bool progressSaved;
+
+  /// Give the controls the whole area under the board rather than their own
+  /// natural height. Snake's centred D-pad is the one user.
+  final bool fillControls;
+
+  /// Whole-screen drag handling for the swipe games. The gesture covers the
+  /// board *and* the empty space around it, and stays translucent so buttons
+  /// underneath still take their taps.
+  final GestureDragStartCallback? onPanStart;
+  final GestureDragUpdateCallback? onPanUpdate;
+  final GestureDragEndCallback? onPanEnd;
 
   @override
-  State<GameScaffold> createState() => _GameScaffoldState();
+  ConsumerState<GameScaffold> createState() => _GameScaffoldState();
 }
 
-class _GameScaffoldState extends State<GameScaffold> {
-  bool _pauseSeen = false;
+class _GameScaffoldState extends ConsumerState<GameScaffold> {
+  final _back = GlobalKey<GameBackScopeState>();
 
   void _openPause() {
-    _pauseSeen = true;
+    _back.currentState?.notePauseSeen();
     widget.onOverflow();
-  }
-
-  void _handleBack(bool didPop) {
-    if (didPop) return;
-    // First back opens the pause sheet; once it's been seen, back asks to exit.
-    if (!_pauseSeen) {
-      _openPause();
-    } else {
-      widget.onExitRequested();
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) => _handleBack(didPop),
-      child: Scaffold(
-        backgroundColor: t.bg,
-        body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(Insets.s4 + 2, Insets.s5, Insets.s4 + 2, Insets.s4),
-            child: Column(
-              children: [
-                // Top bar — overflow only.
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Semantics(
-                    button: true,
-                    label: 'Pause',
-                    child: InkResponse(
-                      onTap: _openPause,
-                      radius: 24,
-                      child: SizedBox(
-                        width: 40,
-                        height: 40,
-                        child: Icon(Icons.more_vert_rounded, color: t.textFaint, size: 20),
-                      ),
-                    ),
-                  ),
+    final reduced = reduceMotionEnabled(context, ref);
+    final hasPan =
+        widget.onPanStart != null || widget.onPanUpdate != null || widget.onPanEnd != null;
+
+    Widget body = Padding(
+      padding: const EdgeInsets.fromLTRB(Insets.s4 + 2, Insets.s5, Insets.s4 + 2, Insets.s4),
+      child: Column(
+        children: [
+          // Top bar — overflow only.
+          Align(
+            alignment: Alignment.centerRight,
+            child: Semantics(
+              button: true,
+              label: 'Pause',
+              child: InkResponse(
+                onTap: _openPause,
+                radius: 24,
+                child: SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: Icon(Icons.more_vert_rounded, color: t.textFaint, size: 20),
                 ),
-                const Gap(Insets.s1 + 2),
-                widget.statusBar,
-                const Gap(Insets.s6),
-                // Board hugs the area under the status row; leftover space falls
-                // to the bottom, above the controls (per the mockups).
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    child: RepaintBoundary(child: widget.board),
-                  ),
-                ),
-                ?widget.controls,
-              ],
+              ),
             ),
           ),
-        ),
+          const Gap(Insets.s1 + 2),
+          widget.statusBar,
+          const Gap(Insets.s6),
+          if (widget.fillControls)
+            // The board keeps its square, the controls take everything under it.
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, c) {
+                  final side = math.min(c.maxWidth, c.maxHeight);
+                  return Column(
+                    children: [
+                      SizedBox(
+                        width: side,
+                        height: side,
+                        child: RepaintBoundary(child: widget.board),
+                      ),
+                      if (widget.controls != null) Expanded(child: widget.controls!),
+                    ],
+                  );
+                },
+              ),
+            )
+          else ...[
+            // Board hugs the area under the status row; leftover space falls
+            // to the bottom, above the controls (per the mockups).
+            Expanded(
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: RepaintBoundary(child: widget.board),
+              ),
+            ),
+            // The end-of-game strip grows the controls, which shrinks the board
+            // area above it. Animating the size is what stops the board jumping.
+            if (widget.controls != null)
+              AnimatedSize(
+                duration: reduced ? Duration.zero : MotionPreset.appear.duration,
+                curve: MotionPreset.appear.curve,
+                alignment: Alignment.topCenter,
+                child: widget.controls!,
+              ),
+          ],
+        ],
+      ),
+    );
+
+    if (hasPan) {
+      body = GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onPanStart: widget.onPanStart,
+        onPanUpdate: widget.onPanUpdate,
+        onPanEnd: widget.onPanEnd,
+        child: body,
+      );
+    }
+
+    return GameBackScope(
+      key: _back,
+      onPause: _openPause,
+      ended: widget.ended,
+      progressSaved: widget.progressSaved,
+      child: Scaffold(
+        backgroundColor: t.bg,
+        body: SafeArea(child: body),
       ),
     );
   }

@@ -194,7 +194,7 @@ class _PlayMafiaScreenState extends ConsumerState<PlayMafiaScreen> {
   }
 
   Future<void> _confirmExit() async {
-    final leave = await showExitConfirm(context, ref, progressSaved: false);
+    final leave = await showExitConfirm(context, progressSaved: false);
     if (leave && mounted) context.go(Routes.home);
   }
 

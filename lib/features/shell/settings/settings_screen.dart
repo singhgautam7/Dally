@@ -77,21 +77,6 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                     _Row(
                       tokens: t,
-                      title: 'Handedness',
-                      subtitle: 'Which corner the pad takes',
-                      trailing: _MiniSegmented<Handedness>(
-                        tokens: t,
-                        value: settings.handedness,
-                        options: const [Handedness.left, Handedness.right],
-                        labelOf: (o) => o == Handedness.left ? 'Left' : 'Right',
-                        onSelect: (o) {
-                          Haptics.selection(ref);
-                          controller.setHandedness(o);
-                        },
-                      ),
-                    ),
-                    _Row(
-                      tokens: t,
                       child: DallyToggle(
                         title: 'Haptics',
                         value: settings.hapticsEnabled,
@@ -111,6 +96,7 @@ class SettingsScreen extends ConsumerWidget {
                       tokens: t,
                       child: DallyToggle(
                         title: 'Sound',
+                        subtitle: 'Dice and coin effects',
                         value: settings.soundEnabled,
                         onChanged: (v) => controller.setSound(v),
                       ),

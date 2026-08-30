@@ -17,10 +17,11 @@ _Settings _$SettingsFromJson(Map<String, dynamic> json) => _Settings(
         json['onScreenControls'],
       ) ??
       OnScreenControls.dpad,
-  handedness:
-      $enumDecodeNullable(_$HandednessEnumMap, json['handedness']) ??
-      Handedness.right,
+  dpadPosition:
+      $enumDecodeNullable(_$DpadPositionEnumMap, json['dpadPosition']) ??
+      DpadPosition.centre,
   longPressMs: (json['longPressMs'] as num?)?.toInt() ?? 400,
+  ludoDieFollowsTurn: json['ludoDieFollowsTurn'] as bool? ?? true,
   reduceMotion: json['reduceMotion'] as bool? ?? false,
   styleChoices:
       (json['styleChoices'] as Map<String, dynamic>?)?.map(
@@ -35,8 +36,9 @@ Map<String, dynamic> _$SettingsToJson(_Settings instance) => <String, dynamic>{
   'hapticsEnabled': instance.hapticsEnabled,
   'soundEnabled': instance.soundEnabled,
   'onScreenControls': _$OnScreenControlsEnumMap[instance.onScreenControls]!,
-  'handedness': _$HandednessEnumMap[instance.handedness]!,
+  'dpadPosition': _$DpadPositionEnumMap[instance.dpadPosition]!,
   'longPressMs': instance.longPressMs,
+  'ludoDieFollowsTurn': instance.ludoDieFollowsTurn,
   'reduceMotion': instance.reduceMotion,
   'styleChoices': instance.styleChoices,
 };
@@ -46,7 +48,8 @@ const _$OnScreenControlsEnumMap = {
   OnScreenControls.dpad: 'dpad',
 };
 
-const _$HandednessEnumMap = {
-  Handedness.left: 'left',
-  Handedness.right: 'right',
+const _$DpadPositionEnumMap = {
+  DpadPosition.left: 'left',
+  DpadPosition.centre: 'centre',
+  DpadPosition.right: 'right',
 };

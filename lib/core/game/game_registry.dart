@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../features/games/carrom/carrom_module.dart';
 import '../../features/games/chess/chess_module.dart';
 import '../../features/games/dots_and_boxes/dots_and_boxes_module.dart';
 import '../../features/games/fifteen_puzzle/fifteen_puzzle_module.dart';
@@ -53,10 +52,8 @@ final List<GameModule> kGameModules = <GameModule>[
   LudoModule(),
   SnakesAndLaddersModule(),
   SolitaireModule(),
-  CarromModule(),
 
-  // Word — three games sharing one bundled, offline word list.
-  WordGuessModule(),
+  // Word — two games sharing one bundled, offline word list.
   AnagramsModule(),
   WordSearchModule(),
 
