@@ -4,6 +4,7 @@ import '../theme/dally_tokens.dart';
 import '../theme/spacing.dart';
 import '../theme/type_scale.dart';
 import 'primary_pill.dart';
+import 'dally_sheet.dart';
 
 /// The one empty/error shape: a 44px hairline glyph, a title, one line, and at
 /// most one action.
@@ -84,16 +85,8 @@ Future<void> showRecoverableError(
   String? destructiveLabel,
   VoidCallback? onDestructive,
 }) {
-  final t = context.tokens;
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: t.surface,
-    barrierColor: Colors.black.withValues(alpha: 0.6),
-    showDragHandle: true,
-    shape: RoundedRectangleBorder(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      side: BorderSide(color: t.border),
-    ),
+  return showDallySheet<void>(
+    context,
     builder: (sheetContext) {
       final t = sheetContext.tokens;
       return SafeArea(

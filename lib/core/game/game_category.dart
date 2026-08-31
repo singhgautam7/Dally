@@ -27,9 +27,10 @@ enum GameCategory {
   board('Board', HomeSection.games),
   brain('Brain', HomeSection.games),
   party('Party', HomeSection.games),
+  word('Word', HomeSection.words),
   mentalMath('Mental Math', HomeSection.mentalMath),
   quickPlay('Quick Play', HomeSection.quickTools),
-  arcade('Arcade', HomeSection.arcade);
+  arcade('Arcade (BETA)', HomeSection.arcade);
 
   const GameCategory(this.label, this.section);
   final String label;
@@ -39,9 +40,10 @@ enum GameCategory {
 /// The labelled bands on home, in display order.
 enum HomeSection {
   games('Games'),
+  words('Word games'),
   mentalMath('Mental math'),
   quickTools('Quick tools'),
-  arcade('Arcade');
+  arcade('Arcade (BETA)');
 
   const HomeSection(this.label);
   final String label;

@@ -194,7 +194,7 @@ class _AutoImposters extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 14),
               decoration: BoxDecoration(
                 color: n == selected ? t.surfaceAlt : Colors.transparent,
-                borderRadius: BorderRadius.circular(11),
+                borderRadius: Radii.containerBR,
                 border: Border.all(color: n == selected ? t.accent : t.border),
               ),
               child: Center(
@@ -232,7 +232,7 @@ class _Segmented<T> extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 13),
                 decoration: BoxDecoration(
                   color: v == value ? t.surfaceAlt : Colors.transparent,
-                  borderRadius: BorderRadius.circular(11),
+                  borderRadius: Radii.containerBR,
                   border: Border.all(color: v == value ? t.accent : t.border),
                 ),
                 child: Center(

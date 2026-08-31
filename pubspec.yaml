@@ -10,8 +10,6 @@ dependencies:
   flutter:
     sdk: flutter
 
-  cupertino_icons: 1.0.9
-
   # State management (3.3.x is the latest line compatible with Dart 3.11)
   flutter_riverpod: 3.3.2
   # Routing
@@ -26,6 +24,9 @@ dependencies:
   # Pure-Dart, offline chess rules (legal moves, FEN, check/mate/stalemate).
   # Powers the Lichess mobile app; move generation is fully decoupled.
   dartchess: 0.13.1
+  # Bundled SFX playback (dice roll). Offline assets only — no network, no
+  # analytics; pinned like every other dependency for the 3.11 SDK.
+  audioplayers: 6.7.1
 
 dev_dependencies:
   flutter_test:
@@ -47,7 +48,8 @@ flutter:
 
   assets:
     - assets/glyphs/
-    - assets/styles/
+    - assets/sfx/
+    - assets/words/
 
   fonts:
     - family: Space Grotesk

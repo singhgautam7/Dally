@@ -7,6 +7,7 @@ import '../../../../core/app_providers.dart';
 import '../../../../core/game/game_module.dart';
 import '../../../../core/game/session_recorder.dart';
 import '../../../../core/services/haptics.dart';
+import '../../../../core/services/sfx.dart';
 import '../../../../core/storage/game_session.dart';
 import '../../../../core/theme/dally_tokens.dart';
 import '../../../../core/theme/motion.dart';
@@ -17,7 +18,7 @@ import '../../../../core/widgets/primary_pill.dart';
 import '../../../../core/widgets/style_picker_sheet.dart';
 import '../ui/quick_play_scaffold.dart';
 import 'dice_logic.dart';
-import 'dice_painter.dart';
+import '../../../../core/widgets/die_view.dart';
 
 /// Dice — one to six d6. Each die cycles four random faces at 70ms, staggered
 /// 40ms per die; the total counts up over 300ms once the last die settles.
@@ -46,22 +47,35 @@ class _PlayDiceScreenState extends ConsumerState<PlayDiceScreen>
   bool _rolling = false;
   final List<Timer> _timers = [];
 
+  /// Usage is recorded on the way out — in `deactivate`, not `dispose`:
+  /// reading a provider from an element that is already unmounted is
+  /// unsafe, and this screen only ever writes one session.
+  bool _sessionRecorded = false;
+
+  @override
+  void deactivate() {
+    if (!_sessionRecorded) {
+      _sessionRecorded = true;
+      if (_rolls > 0) {
+        recordSession(
+          ref,
+          gameId: widget.module.id,
+          startedAt: _openedAt,
+          durationSeconds: DateTime.now().difference(_openedAt).inSeconds,
+          outcome: SessionOutcome.completed,
+          extras: {'rolls': _rolls, 'dice': _count},
+        );
+      }
+    }
+    super.deactivate();
+  }
+
   @override
   void dispose() {
     for (final t in _timers) {
       t.cancel();
     }
     _countUp.dispose();
-    if (_rolls > 0) {
-      recordSession(
-        ref,
-        gameId: widget.module.id,
-        startedAt: _openedAt,
-        durationSeconds: DateTime.now().difference(_openedAt).inSeconds,
-        outcome: SessionOutcome.completed,
-        extras: {'rolls': _rolls, 'dice': _count},
-      );
-    }
     super.dispose();
   }
 
@@ -72,8 +86,9 @@ class _PlayDiceScreenState extends ConsumerState<PlayDiceScreen>
     final rng = ref.read(randomProvider);
     final values = rollDice(rng, count: _count);
     _rolls++;
+    Sounds.play(ref, Sfx.diceRoll);
 
-    if (reduceMotionOf(context)) {
+    if (readReduceMotion(context, ref)) {
       setState(() {
         _values = values;
         _shown = values;

@@ -80,29 +80,39 @@ class _StylePreviewPainter extends CustomPainter {
   bool shouldRepaint(_StylePreviewPainter old) => old.style != style;
 }
 
-/// On-screen controls chooser mirrored into the pause sheet.
-class OnScreenControlsRow extends ConsumerWidget {
-  const OnScreenControlsRow({super.key});
+/// A row of small chips in the pause sheet, matching the style picker's weight.
+class _ChipRow<T> extends StatelessWidget {
+  const _ChipRow({
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.options,
+    required this.labelOf,
+    required this.onSelect,
+  });
+
+  final String title;
+  final String subtitle;
+  final T value;
+  final List<T> options;
+  final String Function(T) labelOf;
+  final ValueChanged<T> onSelect;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final t = context.tokens;
-    final value = ref.watch(settingsControllerProvider.select((s) => s.onScreenControls));
-    Widget chip(String label, OnScreenControls v) {
+    Widget chip(T v) {
       final on = value == v;
       return GestureDetector(
-        onTap: () {
-          Haptics.selection(ref);
-          ref.read(settingsControllerProvider.notifier).setOnScreenControls(v);
-        },
+        onTap: () => onSelect(v),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: on ? t.accent : Colors.transparent,
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: Radii.pillBR,
             border: on ? null : Border.all(color: t.border),
           ),
-          child: Text(label,
+          child: Text(labelOf(v),
               style: DallyType.body.copyWith(
                 fontSize: 12,
                 fontWeight: on ? FontWeight.w600 : FontWeight.w400,
@@ -120,19 +130,61 @@ class OnScreenControlsRow extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('On-screen controls',
+                Text(title,
                     style: DallyType.body.copyWith(fontSize: 15, color: t.textPrimary)),
                 const SizedBox(height: 3),
-                Text('Also in Settings → Gameplay',
+                Text(subtitle,
                     style: DallyType.body.copyWith(fontSize: 12, color: t.textFaint)),
               ],
             ),
           ),
-          chip('Swipe only', OnScreenControls.swipeOnly),
-          const Gap.h(6),
-          chip('D-pad', OnScreenControls.dpad),
+          for (var i = 0; i < options.length; i++) ...[
+            if (i > 0) const Gap.h(6),
+            chip(options[i]),
+          ],
         ],
       ),
     );
   }
+}
+
+/// On-screen controls chooser mirrored into the pause sheet.
+class OnScreenControlsRow extends ConsumerWidget {
+  const OnScreenControlsRow({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => _ChipRow<OnScreenControls>(
+        title: 'On-screen controls',
+        subtitle: 'Also in Settings → Gameplay',
+        value: ref.watch(settingsControllerProvider.select((s) => s.onScreenControls)),
+        options: const [OnScreenControls.swipeOnly, OnScreenControls.dpad],
+        labelOf: (o) => o == OnScreenControls.swipeOnly ? 'Swipe only' : 'D-pad',
+        onSelect: (o) {
+          Haptics.selection(ref);
+          ref.read(settingsControllerProvider.notifier).setOnScreenControls(o);
+        },
+      );
+}
+
+/// Where the D-pad sits. Centre — the default — hands it the whole area under
+/// the board; left and right tuck it into a corner for one-handed play.
+class DpadPositionRow extends ConsumerWidget {
+  const DpadPositionRow({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => _ChipRow<DpadPosition>(
+        title: 'D-pad position',
+        subtitle: 'Swipe anywhere still steers',
+        value: ref.watch(settingsControllerProvider.select((s) => s.dpadPosition)),
+        options: const [DpadPosition.left, DpadPosition.centre, DpadPosition.right],
+        labelOf: (o) => switch (o) {
+          DpadPosition.left => 'Left',
+          DpadPosition.centre => 'Centre',
+          DpadPosition.right => 'Right',
+        },
+        onSelect: (o) {
+          Haptics.selection(ref);
+          ref.read(settingsControllerProvider.notifier).setDpadPosition(o);
+        },
+      );
 }

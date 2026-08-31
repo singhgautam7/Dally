@@ -53,7 +53,7 @@ class PlayerNameRow extends StatelessWidget {
                 fillColor: t.surfaceAlt,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(11),
+                  borderRadius: Radii.containerBR,
                   borderSide: BorderSide.none,
                 ),
               ),

@@ -25,7 +25,7 @@ class MinesweeperPainter extends CustomPainter {
     required this.style,
     required this.gameOver,
     required this.explodedIndex,
-    required this.reveal,
+    required this.cascade,
   });
 
   final MinesweeperBoard board;
@@ -34,8 +34,13 @@ class MinesweeperPainter extends CustomPainter {
   final bool gameOver;
   final int explodedIndex;
 
-  /// The reveal fraction (0..1) for a cascade fade-in of newly-opened cells.
-  final double reveal;
+  /// The cells opened by the last tap, keyed by how many rings out from it they
+  /// sit, plus how far the ripple has travelled (in rings). A cell fades in as
+  /// the ripple reaches it; everything not in the map is drawn as usual.
+  ///
+  /// Doing it here rather than as a widget per cell is what keeps a 30×16 clear
+  /// to one repaint.
+  final ({Map<int, int> ringOf, double front})? cascade;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -70,8 +75,24 @@ class MinesweeperPainter extends CustomPainter {
           Paint()..color = fill,
         );
 
+    final ripple = cascade;
+
+    /// 0 → not opened yet, 1 → fully drawn. Cells outside the ripple are 1.
+    double opened(int i) {
+      if (ripple == null) return 1;
+      final ring = ripple.ringOf[i];
+      if (ring == null) return 1;
+      return (ripple.front - ring).clamp(0.0, 1.0);
+    }
+
     for (var i = 0; i < board.cells; i++) {
       final revealed = board.reveal[i] == CellReveal.revealed;
+      final open = revealed ? opened(i) : 1.0;
+      // Not reached by the ripple yet: it still looks like a hidden tile.
+      if (revealed && open <= 0) {
+        drawTile(i, tokens.surfaceAlt);
+        continue;
+      }
 
       if (!revealed) {
         drawTile(i, tokens.surfaceAlt);
@@ -105,7 +126,15 @@ class MinesweeperPainter extends CustomPainter {
           bottomLeft: (!bottom && !left) ? rad : zero,
           bottomRight: (!bottom && !right) ? rad : zero,
         );
-        canvas.drawRRect(rrect, floodPaint);
+        if (open < 1) {
+          // Mid-ripple the tile is still under the flood, so the accent grows
+          // over it rather than appearing out of the board colour.
+          drawTile(i, tokens.surfaceAlt);
+          canvas.drawRRect(
+              rrect, Paint()..color = tokens.accent.withValues(alpha: open));
+        } else {
+          canvas.drawRRect(rrect, floodPaint);
+        }
         continue;
       }
 
@@ -114,25 +143,54 @@ class MinesweeperPainter extends CustomPainter {
       canvas.drawRect(rectOf(i).deflate(0.25), hairline);
       final colors = tokens.minesweeperNumbers;
       final color = colors[(board.count[i] - 1).clamp(0, colors.length - 1)];
-      _drawDigit(canvas, rectOf(i), board.count[i], color, cell);
+      _drawDigit(canvas, rectOf(i), board.count[i],
+          open < 1 ? color.withValues(alpha: open) : color, cell);
     }
   }
 
   int _at(int c, int r, int w, int h) => (c < 0 || c >= w || r < 0 || r >= h) ? -1 : r * w + c;
 
+  /// Laid-out digits, shared across frames.
+  ///
+  /// An Expert board has ~200 numbered cells, and this used to build and lay
+  /// out a fresh [TextPainter] for every one of them on **every frame** — text
+  /// layout includes shaping, so a cascade was doing ~12 000 shaping passes a
+  /// second to draw eight distinct glyphs. There are only ever eight digits in
+  /// a handful of colours at one cell size, so they are laid out once and
+  /// reused.
+  ///
+  /// A cell still fading in during the cascade has a partial alpha, which would
+  /// thrash a cache keyed on colour — those few cells (the ripple front only,
+  /// never the settled board behind it) still lay out per frame.
+  static final Map<int, TextPainter> _digits = {};
+
   void _drawDigit(Canvas canvas, Rect rect, int n, Color color, double cell) {
-    final tp = TextPainter(
-      text: TextSpan(
-        text: '$n',
-        style: TextStyle(
-          fontFamily: 'JetBrains Mono',
-          fontSize: cell * 0.52,
-          fontWeight: FontWeight.w700,
-          color: color,
+    final fontSize = cell * 0.52;
+    final opaque = color.a >= 1.0;
+    final key = opaque ? Object.hash(n, fontSize, color.toARGB32()) : null;
+
+    var tp = key == null ? null : _digits[key];
+    if (tp == null) {
+      tp = TextPainter(
+        text: TextSpan(
+          text: '$n',
+          style: TextStyle(
+            fontFamily: 'JetBrains Mono',
+            fontSize: fontSize,
+            fontWeight: FontWeight.w700,
+            color: color,
+          ),
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+        textDirection: TextDirection.ltr,
+      )..layout();
+      if (key != null) {
+        // Bounded: 8 digits × the palette's number colours × one cell size per
+        // device. The clear is a floor against an unforeseen key explosion, not
+        // an eviction policy — there is nothing here worth an LRU.
+        if (_digits.length > 64) _digits.clear();
+        _digits[key] = tp;
+      }
+    }
     tp.paint(canvas, rect.center - Offset(tp.width / 2, tp.height / 2));
   }
 

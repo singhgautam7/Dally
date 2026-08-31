@@ -51,20 +51,33 @@ class _PlaySpinnerScreenState extends ConsumerState<PlaySpinnerScreen>
   int _winner = -1;
   int _spins = 0;
 
+  /// Usage is recorded on the way out — in `deactivate`, not `dispose`:
+  /// reading a provider from an element that is already unmounted is
+  /// unsafe, and this screen only ever writes one session.
+  bool _sessionRecorded = false;
+
+  @override
+  void deactivate() {
+    if (!_sessionRecorded) {
+      _sessionRecorded = true;
+      if (_spins > 0) {
+        recordSession(
+          ref,
+          gameId: widget.module.id,
+          startedAt: _openedAt,
+          durationSeconds: DateTime.now().difference(_openedAt).inSeconds,
+          outcome: SessionOutcome.completed,
+          configLabel: _names.isEmpty ? 'No names' : '${_names.length} players',
+          extras: {'spins': _spins, 'players': _names.length},
+        );
+      }
+    }
+    super.deactivate();
+  }
+
   @override
   void dispose() {
     _spin.dispose();
-    if (_spins > 0) {
-      recordSession(
-        ref,
-        gameId: widget.module.id,
-        startedAt: _openedAt,
-        durationSeconds: DateTime.now().difference(_openedAt).inSeconds,
-        outcome: SessionOutcome.completed,
-        configLabel: _names.isEmpty ? 'No names' : '${_names.length} players',
-        extras: {'spins': _spins, 'players': _names.length},
-      );
-    }
     super.dispose();
   }
 
@@ -78,7 +91,7 @@ class _PlaySpinnerScreenState extends ConsumerState<PlaySpinnerScreen>
       _winner = result.seatIndex;
       if (_winner >= 0) _hits[_winner] = (_hits[_winner] ?? 0) + 1;
     });
-    if (reduceMotionOf(context)) {
+    if (readReduceMotion(context, ref)) {
       _spin.value = 1;
       Haptics.light(ref);
       return;

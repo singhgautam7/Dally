@@ -1,20 +1,21 @@
 // ignore_for_file: sort_child_properties_last
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/storage/game_session.dart';
 import '../../../../core/game/session_recorder.dart';
 import '../../../../core/game/how_to_launcher.dart';
-import '../../../../core/routing/routes.dart';
 import '../../../../core/services/haptics.dart';
 import '../../../../core/theme/dally_tokens.dart';
 import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/type_scale.dart';
+import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/widgets/pause_sheet.dart';
+import '../../../../core/widgets/primary_pill.dart';
 import '../logic/mafia_game.dart';
 import '../mafia_config.dart';
 import '../mafia_providers.dart';
+import '../../../../core/app_providers.dart';
 
 /// The whole Mafia flow lives in one screen, sequenced by [_Phase]: a
 /// phone-passing deal, discussion, voting (open or private), the reveal of who
@@ -32,6 +33,8 @@ class PlayMafiaScreen extends ConsumerStatefulWidget {
 }
 
 class _PlayMafiaScreenState extends ConsumerState<PlayMafiaScreen> {
+  final _back = GlobalKey<GameBackScopeState>();
+
   late MafiaGame _game;
   _Phase _phase = _Phase.pass;
 
@@ -57,6 +60,7 @@ class _PlayMafiaScreenState extends ConsumerState<PlayMafiaScreen> {
       names: widget.config.names,
       imposters: widget.config.imposters,
       wordPair: deck.draw(difficulty: widget.config.difficulty),
+      rng: ref.read(randomProvider).asRandom,
     );
     _phase = _Phase.pass;
     _startedAt = DateTime.now();
@@ -172,6 +176,7 @@ class _PlayMafiaScreenState extends ConsumerState<PlayMafiaScreen> {
   // ── Pause / leave ─────────────────────────────────────────────────────────
 
   Future<void> _openPause() async {
+    _back.currentState?.notePauseSeen();
     final result = await showPauseSheet(
       context,
       ref,
@@ -186,16 +191,11 @@ class _PlayMafiaScreenState extends ConsumerState<PlayMafiaScreen> {
       case PauseResult.restart:
         setState(_deal);
       case PauseResult.exit:
-        await _confirmExit();
+        await leaveGame(context, ended: _phase == _Phase.over);
       case PauseResult.resume:
       case null:
         break;
     }
-  }
-
-  Future<void> _confirmExit() async {
-    final leave = await showExitConfirm(context, ref, progressSaved: false);
-    if (leave && mounted) context.go(Routes.home);
   }
 
   void _playAgain() => setState(_deal);
@@ -203,11 +203,10 @@ class _PlayMafiaScreenState extends ConsumerState<PlayMafiaScreen> {
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _openPause();
-      },
+    return GameBackScope(
+      key: _back,
+      onPause: _openPause,
+      ended: _phase == _Phase.over,
       child: Scaffold(
         backgroundColor: t.bg,
         body: SafeArea(
@@ -217,15 +216,7 @@ class _PlayMafiaScreenState extends ConsumerState<PlayMafiaScreen> {
               children: [
                 Align(
                   alignment: Alignment.centerRight,
-                  child: InkResponse(
-                    onTap: _openPause,
-                    radius: 24,
-                    child: SizedBox(
-                      width: 40,
-                      height: 40,
-                      child: Icon(Icons.more_vert_rounded, color: t.textFaint, size: 20),
-                    ),
-                  ),
+                  child: OverflowButton(onTap: _openPause),
                 ),
                 Expanded(child: _body(t)),
               ],
@@ -282,7 +273,7 @@ class _PlayMafiaScreenState extends ConsumerState<PlayMafiaScreen> {
             padding: const EdgeInsets.symmetric(vertical: 56, horizontal: 24),
             decoration: BoxDecoration(
               color: t.surfaceAlt,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: Radii.containerBR,
               border: Border.all(color: t.border),
             ),
             child: Column(
@@ -314,7 +305,7 @@ class _PlayMafiaScreenState extends ConsumerState<PlayMafiaScreen> {
           padding: const EdgeInsets.all(Insets.s5),
           decoration: BoxDecoration(
             color: t.surfaceAlt,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: Radii.containerBR,
             border: Border.all(color: imposter ? t.accent : t.border, width: imposter ? 2 : 1),
           ),
           child: Column(
@@ -509,7 +500,7 @@ class _PlayMafiaScreenState extends ConsumerState<PlayMafiaScreen> {
           padding: const EdgeInsets.all(Insets.s4),
           decoration: BoxDecoration(
             color: t.surfaceAlt,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: Radii.containerBR,
             border: Border.all(color: t.border),
           ),
           child: Column(
@@ -535,7 +526,7 @@ class _PlayMafiaScreenState extends ConsumerState<PlayMafiaScreen> {
       primaryLabel: 'Play again · same ${_game.players.length}',
       onPrimary: _playAgain,
       secondaryLabel: 'Back to games',
-      onSecondary: () => context.go(Routes.home),
+      onSecondary: () => leaveGame(context, ended: true),
     );
   }
 
@@ -591,58 +582,21 @@ class _Stage extends StatelessWidget {
         ),
         if (primaryLabel != null) ...[
           const Gap(Insets.s4),
-          _Pill(
+          PrimaryPill(
             label: primaryLabel!,
-            filled: true,
             enabled: primaryEnabled,
-            onTap: primaryEnabled ? onPrimary : null,
+            onPressed: onPrimary,
           ),
         ],
         if (secondaryLabel != null) ...[
           const Gap(Insets.s2),
-          _Pill(label: secondaryLabel!, filled: false, enabled: true, onTap: onSecondary),
+          PrimaryPill.secondary(label: secondaryLabel!, onPressed: onSecondary),
         ],
       ],
     );
   }
 }
 
-class _Pill extends StatelessWidget {
-  const _Pill({required this.label, required this.filled, required this.enabled, required this.onTap});
-  final String label;
-  final bool filled;
-  final bool enabled;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.tokens;
-    return Opacity(
-      opacity: enabled ? 1 : 0.4,
-      child: Material(
-        color: filled ? t.accent : Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(999),
-          side: filled ? BorderSide.none : BorderSide(color: t.border),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 17),
-            child: Center(
-              child: Text(label,
-                  style: DallyType.bodyStrong.copyWith(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: filled ? t.onAccent : t.textPrimary)),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _CandidateRow extends StatelessWidget {
   const _CandidateRow({required this.name, required this.selected, required this.onTap});
@@ -659,7 +613,7 @@ class _CandidateRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         decoration: BoxDecoration(
           color: selected ? t.accent.withValues(alpha: 0.14) : t.surfaceAlt,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: Radii.containerBR,
           border: Border.all(color: selected ? t.accent : t.border, width: selected ? 2 : 1),
         ),
         child: Row(

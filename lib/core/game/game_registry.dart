@@ -4,12 +4,16 @@ import '../../features/games/chess/chess_module.dart';
 import '../../features/games/dots_and_boxes/dots_and_boxes_module.dart';
 import '../../features/games/fifteen_puzzle/fifteen_puzzle_module.dart';
 import '../../features/games/game_2048/game_2048_module.dart';
+import '../../features/games/ludo/ludo_module.dart';
 import '../../features/games/memory/memory_module.dart';
 import '../../features/games/mafia/mafia_module.dart';
 import '../../features/games/minesweeper/minesweeper_module.dart';
 import '../../features/games/snake/snake_module.dart';
+import '../../features/games/snakes_and_ladders/snakes_module.dart';
+import '../../features/games/solitaire/solitaire_module.dart';
 import '../../features/games/sudoku/sudoku_module.dart';
 import '../../features/games/tic_tac_toe/tic_tac_toe_module.dart';
+import '../../features/games/words/words_modules.dart';
 import '../../features/games/quick_play/bottle_spinner/bottle_spinner_module.dart';
 import '../../features/games/quick_play/coin_flip/coin_flip_module.dart';
 import '../../features/games/quick_play/dice/dice_module.dart';
@@ -45,6 +49,13 @@ final List<GameModule> kGameModules = <GameModule>[
   ChessModule(),
   MafiaModule(),
   DotsAndBoxesModule(),
+  LudoModule(),
+  SnakesAndLaddersModule(),
+  SolitaireModule(),
+
+  // Word — two games sharing one bundled, offline word list.
+  AnagramsModule(),
+  WordSearchModule(),
 
   // Mental Math — six drills sharing one difficulty, set on home.
   ArithmeticSprintModule(),

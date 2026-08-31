@@ -55,21 +55,34 @@ class _PlayRandomNumberScreenState extends ConsumerState<PlayRandomNumberScreen>
     _maxController.text = '${_draw.max}';
   }
 
+  /// Usage is recorded on the way out — in `deactivate`, not `dispose`:
+  /// reading a provider from an element that is already unmounted is
+  /// unsafe, and this screen only ever writes one session.
+  bool _sessionRecorded = false;
+
+  @override
+  void deactivate() {
+    if (!_sessionRecorded) {
+      _sessionRecorded = true;
+      if (_draws > 0) {
+        recordSession(
+          ref,
+          gameId: widget.module.id,
+          startedAt: _openedAt,
+          durationSeconds: DateTime.now().difference(_openedAt).inSeconds,
+          outcome: SessionOutcome.completed,
+          extras: {'draws': _draws},
+        );
+      }
+    }
+    super.deactivate();
+  }
+
   @override
   void dispose() {
     _countUp.dispose();
     _minController.dispose();
     _maxController.dispose();
-    if (_draws > 0) {
-      recordSession(
-        ref,
-        gameId: widget.module.id,
-        startedAt: _openedAt,
-        durationSeconds: DateTime.now().difference(_openedAt).inSeconds,
-        outcome: SessionOutcome.completed,
-        extras: {'draws': _draws},
-      );
-    }
     super.dispose();
   }
 
@@ -88,7 +101,7 @@ class _PlayRandomNumberScreenState extends ConsumerState<PlayRandomNumberScreen>
       _value = result.$2;
     });
     Haptics.light(ref);
-    if (reduceMotionOf(context)) {
+    if (readReduceMotion(context, ref)) {
       _countUp.value = 1;
     } else {
       _countUp.forward(from: 0);
@@ -258,11 +271,11 @@ class _BoundField extends StatelessWidget {
             fillColor: t.surfaceAlt,
             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(11),
+              borderRadius: Radii.containerBR,
               borderSide: BorderSide.none,
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(11),
+              borderRadius: Radii.containerBR,
               borderSide: invalid ? BorderSide(color: t.danger) : BorderSide.none,
             ),
           ),

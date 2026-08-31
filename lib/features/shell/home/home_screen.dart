@@ -18,6 +18,7 @@ import 'filter_sheet.dart';
 import '../../games/mental_math/math_difficulty.dart';
 import 'home_filter.dart';
 import 'search_field.dart';
+import '../../../core/widgets/dally_sheet.dart';
 
 /// Home = the games list. Registry-driven, grouped into labelled sections, with
 /// a catalogue-derived chip row, a More sheet and a search mode. No bottom nav;
@@ -326,16 +327,8 @@ class _DifficultyControl extends ConsumerWidget {
   }
 
   Future<void> _open(BuildContext context, WidgetRef ref) {
-    final t = context.tokens;
-    return showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: t.surface,
-      barrierColor: Colors.black.withValues(alpha: 0.6),
-      showDragHandle: true,
-      shape: RoundedRectangleBorder(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        side: BorderSide(color: t.border),
-      ),
+    return showDallySheet<void>(
+    context,
       builder: (sheetContext) {
         final t = sheetContext.tokens;
         final current = ref.read(mathDifficultyProvider);

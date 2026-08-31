@@ -2,11 +2,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/storage/game_session.dart';
 import '../../../../core/game/session_recorder.dart';
-import '../../../../core/routing/routes.dart';
 import '../../../../core/game/how_to_launcher.dart';
 import '../../../../core/app_providers.dart';
 import '../../../../core/services/haptics.dart';
@@ -17,12 +15,13 @@ import '../../../../core/theme/type_scale.dart';
 import '../../../../core/util/format.dart';
 import '../../../../core/util/game_clock.dart';
 import '../../../../core/widgets/board_chip.dart';
+import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/widgets/game_scaffold.dart';
 import '../../../../core/widgets/pause_sheet.dart';
-import '../../../../core/widgets/primary_pill.dart';
 import '../logic/memory_game.dart';
 import '../memory_config.dart';
 import 'memory_symbols.dart';
+import '../../../../core/widgets/game_over_strip.dart';
 
 class PlayMemoryScreen extends ConsumerStatefulWidget {
   const PlayMemoryScreen({super.key, required this.moduleId, required this.config});
@@ -34,10 +33,28 @@ class PlayMemoryScreen extends ConsumerStatefulWidget {
 }
 
 class _PlayMemoryScreenState extends ConsumerState<PlayMemoryScreen>
-    with WidgetsBindingObserver, GameClock {
+    with
+        WidgetsBindingObserver,
+        GameClock,
+        TickerProviderStateMixin<PlayMemoryScreen>,
+        MotionRunner<PlayMemoryScreen> {
   late MemoryGame _game;
   bool _done = false;
   DateTime _startedAt = DateTime.now();
+
+  /// The pair the last flip resolved — the only two cards that pop on a match
+  /// or shake on a miss. Everything else on the board stays still.
+  List<int> _pair = const [];
+
+  @override
+  bool get motionReduced => _reduceMotion;
+  bool _reduceMotion = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reduceMotion = readReduceMotion(context, ref);
+  }
 
   String get _sizeKey => '${widget.config.cols}x${widget.config.rows}';
 
@@ -45,7 +62,10 @@ class _PlayMemoryScreenState extends ConsumerState<PlayMemoryScreen>
   void initState() {
     super.initState();
     initClock();
-    _game = MemoryGame(rows: widget.config.rows, cols: widget.config.cols);
+    _game = MemoryGame(
+        rows: widget.config.rows,
+        cols: widget.config.cols,
+        rng: ref.read(randomProvider).asRandom);
     ref.read(statsRepositoryProvider).increment('${widget.moduleId}.played');
   }
 
@@ -66,11 +86,16 @@ class _PlayMemoryScreenState extends ConsumerState<PlayMemoryScreen>
     switch (outcome.kind) {
       case FlipKind.match:
         Haptics.medium(ref);
+        _pair = [outcome.a!, outcome.b!];
+        play(MotionPreset.pop);
         if (outcome.complete) _onComplete();
       case FlipKind.miss:
+        _pair = [outcome.a!, outcome.b!];
+        play(MotionPreset.shake);
         Future.delayed(const Duration(milliseconds: 650), () {
           if (!mounted) return;
           _game.resolveMiss(outcome.a!, outcome.b!);
+          _pair = const [];
           setState(() {});
         });
       case FlipKind.firstUp:
@@ -103,6 +128,7 @@ class _PlayMemoryScreenState extends ConsumerState<PlayMemoryScreen>
     setState(() {
       _game.reset();
       _done = false;
+      _pair = const [];
     });
     _startedAt = DateTime.now();
     resetClock();
@@ -132,18 +158,16 @@ class _PlayMemoryScreenState extends ConsumerState<PlayMemoryScreen>
     }
   }
 
-  Future<void> _confirmExit() async {
-    final leave = await showExitConfirm(context, ref, progressSaved: false);
-    if (leave && mounted) context.go(Routes.home);
-  }
+  Future<void> _confirmExit() =>
+      leaveGame(context, ended: _done, progressSaved: false);
 
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
     return GameScaffold(
       onOverflow: _openPause,
-      onExitRequested: _confirmExit,
-      boardMaxHeightFactor: 0.9,
+      ended: _done,
+      progressSaved: false,
       statusBar: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -152,11 +176,27 @@ class _PlayMemoryScreenState extends ConsumerState<PlayMemoryScreen>
           BoardChip(icon: Icons.schedule_rounded, value: formatClock(elapsedSeconds)),
         ],
       ),
-      board: _Board(game: _game, onTap: _tap),
+      board: _Board(
+        game: _game,
+        onTap: _tap,
+        reduced: _reduceMotion,
+        pair: _pair,
+        pop: motionPreset == MotionPreset.pop ? motionEased.popScale() : 1,
+        shake: motionPreset == MotionPreset.shake
+            ? motionEased.shakeOffset(amplitude: 5)
+            : 0,
+      ),
       controls: Padding(
         padding: const EdgeInsets.only(top: Insets.s4),
         child: _done
-            ? _DoneOverlay(moves: _game.moves, onAgain: _restart, onExit: () => context.go(Routes.home))
+            ? GameOverStrip(
+                title: 'Cleared in ${_game.moves}',
+                subtitle: 'Every pair found.',
+                primaryLabel: 'Again',
+                onPrimary: _restart,
+                secondaryLabel: 'Back',
+                onSecondary: () => leaveGame(context, ended: true),
+              )
             : Column(
                 children: [
                   Text('Find its pair',
@@ -172,9 +212,22 @@ class _PlayMemoryScreenState extends ConsumerState<PlayMemoryScreen>
 }
 
 class _Board extends StatelessWidget {
-  const _Board({required this.game, required this.onTap});
+  const _Board({
+    required this.game,
+    required this.onTap,
+    required this.reduced,
+    required this.pair,
+    required this.pop,
+    required this.shake,
+  });
   final MemoryGame game;
   final ValueChanged<int> onTap;
+  final bool reduced;
+
+  /// The two cards the last flip resolved.
+  final List<int> pair;
+  final double pop;
+  final double shake;
 
   @override
   Widget build(BuildContext context) {
@@ -204,6 +257,9 @@ class _Board extends StatelessWidget {
                   child: _Card(
                     state: game.states[i],
                     symbol: game.symbols[i],
+                    reduced: reduced,
+                    scale: pair.contains(i) ? pop : 1,
+                    offset: pair.contains(i) ? shake : 0,
                     onTap: () => onTap(i),
                   ),
                 ),
@@ -216,9 +272,19 @@ class _Board extends StatelessWidget {
 }
 
 class _Card extends StatelessWidget {
-  const _Card({required this.state, required this.symbol, required this.onTap});
+  const _Card({
+    required this.state,
+    required this.symbol,
+    required this.reduced,
+    required this.scale,
+    required this.offset,
+    required this.onTap,
+  });
   final CardState state;
   final int symbol;
+  final bool reduced;
+  final double scale;
+  final double offset;
   final VoidCallback onTap;
 
   @override
@@ -232,25 +298,22 @@ class _Card extends StatelessWidget {
       child: GestureDetector(
         onTap: state == CardState.faceDown ? onTap : null,
         child: TweenAnimationBuilder<double>(
-          tween: Tween(end: faceUp ? math.pi : 0),
-          duration: Motion.medium,
-          curve: Motion.curve,
-          builder: (context, angle, _) {
-            final showFront = angle > math.pi / 2;
-            return Transform(
+          tween: Tween(end: faceUp ? 1.0 : 0.0),
+          duration: reduced ? Duration.zero : MotionPreset.flip.duration,
+          curve: MotionPreset.flip.curve,
+          builder: (context, v, _) => Transform.translate(
+            offset: Offset(offset, 0),
+            child: Transform(
               alignment: Alignment.center,
-              transform: Matrix4.identity()
-                ..setEntry(3, 2, 0.001)
-                ..rotateY(angle),
-              child: showFront
-                  ? Transform(
-                      alignment: Alignment.center,
-                      transform: Matrix4.identity()..rotateY(math.pi),
-                      child: _face(t, front: true, matched: matched),
-                    )
+              // `flipScaleX` squeezes the card to nothing and back out; the far
+              // face swaps at the crossing. A flat squeeze rather than a 3D
+              // rotation — the house rule is no perspective anywhere.
+              transform: Matrix4.diagonal3Values(v.flipScaleX * scale, scale, 1),
+              child: v.flipPastHalf
+                  ? _face(t, front: true, matched: matched)
                   : _face(t, front: false, matched: false),
-            );
-          },
+            ),
+          ),
         ),
       ),
     );
@@ -280,31 +343,3 @@ class _Card extends StatelessWidget {
   }
 }
 
-class _DoneOverlay extends StatelessWidget {
-  const _DoneOverlay({required this.moves, required this.onAgain, required this.onExit});
-  final int moves;
-  final VoidCallback onAgain;
-  final VoidCallback onExit;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.tokens;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Cleared in $moves',
-            style: DallyType.heading.copyWith(fontSize: 24, color: t.textPrimary)),
-        const SizedBox(height: 5),
-        Text('Every pair found.', style: DallyType.body.copyWith(fontSize: 13, color: t.textMuted)),
-        const Gap(Insets.s4),
-        Row(
-          children: [
-            Expanded(child: PrimaryPill(label: 'Again', onPressed: onAgain)),
-            const Gap.h(Insets.s2 + 2),
-            Expanded(child: PrimaryPill.secondary(label: 'Back', onPressed: onExit)),
-          ],
-        ),
-      ],
-    );
-  }
-}

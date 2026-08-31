@@ -32,11 +32,17 @@ class SettingsController extends Notifier<Settings> {
   Future<void> setOnScreenControls(OnScreenControls value) =>
       _persist(state.copyWith(onScreenControls: value));
 
-  Future<void> setHandedness(Handedness value) =>
-      _persist(state.copyWith(handedness: value));
+  Future<void> setDpadPosition(DpadPosition value) =>
+      _persist(state.copyWith(dpadPosition: value));
+
+  Future<void> setLudoDieFollowsTurn(bool value) =>
+      _persist(state.copyWith(ludoDieFollowsTurn: value));
 
   Future<void> setLongPressMs(int value) =>
       _persist(state.copyWith(longPressMs: value));
+
+  Future<void> setReduceMotion(bool value) =>
+      _persist(state.copyWith(reduceMotion: value));
 
   Future<void> setStyleChoice(String gameId, String styleId) {
     final next = Map<String, String>.from(state.styleChoices)..[gameId] = styleId;

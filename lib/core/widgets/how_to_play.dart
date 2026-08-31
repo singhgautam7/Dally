@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/dally_tokens.dart';
 import '../theme/spacing.dart';
 import '../theme/type_scale.dart';
+import 'dally_sheet.dart';
 
 /// One legend row: a real ~38px board cell (the same fills the game uses) beside
 /// a short line of what it means.
@@ -46,17 +47,9 @@ class HowToContent {
 /// Shows the how-to sheet. [subtitle] names the config being played, e.g.
 /// `"Minesweeper · Intermediate · guess-free"`.
 Future<void> showHowTo(BuildContext context, HowToContent content, {required String subtitle}) {
-  final t = context.tokens;
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: t.surface,
-    barrierColor: Colors.black.withValues(alpha: 0.6),
+  return showDallySheet<void>(
+    context,
     isScrollControlled: true,
-    showDragHandle: true,
-    shape: RoundedRectangleBorder(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      side: BorderSide(color: t.border),
-    ),
     builder: (ctx) => _HowToSheet(content: content, subtitle: subtitle),
   );
 }
@@ -106,7 +99,7 @@ class _HowToSheet extends StatelessWidget {
                   padding: const EdgeInsets.all(Insets.s3 + 2),
                   decoration: BoxDecoration(
                     color: t.surfaceAlt,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: Radii.containerBR,
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,

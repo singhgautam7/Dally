@@ -10,6 +10,7 @@ import '../../../../core/widgets/dally_toggle.dart';
 import '../../../../core/widgets/segmented_selector.dart';
 import '../../../../core/widgets/setup_scaffold.dart';
 import '../snake_config.dart';
+import '../../../../core/theme/spacing.dart';
 
 class SetupSnakeScreen extends ConsumerStatefulWidget {
   const SetupSnakeScreen({super.key, required this.moduleId});
@@ -77,7 +78,7 @@ class _Preview extends StatelessWidget {
     return Container(
       width: dim,
       height: dim,
-      decoration: BoxDecoration(color: t.surface, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(color: t.surface, borderRadius: Radii.containerBR),
       child: CustomPaint(painter: _PreviewPainter(snake: t.accent, food: t.danger)),
     );
   }

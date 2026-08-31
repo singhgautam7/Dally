@@ -1,33 +1,34 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/storage/game_session.dart';
 import '../../../../core/game/game_registry.dart';
 import '../../../../core/game/session_recorder.dart';
-import '../../../../core/routing/routes.dart';
 import '../../../../core/app_providers.dart';
 import '../../../../core/game/how_to_launcher.dart';
 import '../../../../core/services/haptics.dart';
 import '../../../../core/theme/dally_tokens.dart';
+import '../../../../core/theme/motion.dart';
 import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../../../../core/theme/type_scale.dart';
 import '../../../../core/util/format.dart';
 import '../../../../core/util/game_clock.dart';
 import '../../../../core/widgets/board_chip.dart';
+import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/widgets/game_scaffold.dart';
 import '../../../../core/widgets/pause_sheet.dart';
 import '../../../../core/widgets/style_picker_sheet.dart';
-import '../../../../core/widgets/primary_pill.dart';
 import '../../../../core/widgets/round_action_button.dart';
 import '../logic/minesweeper_board.dart';
 import '../minesweeper_config.dart';
 import 'minesweeper_painter.dart';
 import 'minesweeper_pause_extras.dart';
 import 'minesweeper_save.dart';
+import '../../../../core/widgets/game_over_strip.dart';
 
 class PlayMinesweeperScreen extends ConsumerStatefulWidget {
   const PlayMinesweeperScreen({super.key, required this.moduleId, required this.config});
@@ -39,7 +40,11 @@ class PlayMinesweeperScreen extends ConsumerStatefulWidget {
 }
 
 class _PlayMinesweeperScreenState extends ConsumerState<PlayMinesweeperScreen>
-    with WidgetsBindingObserver, GameClock {
+    with
+        WidgetsBindingObserver,
+        GameClock,
+        TickerProviderStateMixin<PlayMinesweeperScreen>,
+        MotionRunner<PlayMinesweeperScreen> {
   late MinesweeperBoard _board;
   bool _flagMode = false;
   bool _gameOver = false;
@@ -51,6 +56,22 @@ class _PlayMinesweeperScreenState extends ConsumerState<PlayMinesweeperScreen>
   Timer? _pressTimer;
   bool _pressConsumed = false;
 
+  /// The cells the last tap opened, by ring distance from that tap. Feeding the
+  /// painter this map is what turns a flood fill into a ripple without a widget
+  /// per cell.
+  Map<int, int> _cascadeRings = const {};
+  int _cascadeDepth = 0;
+
+  @override
+  bool get motionReduced => _reduceMotion;
+  bool _reduceMotion = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reduceMotion = readReduceMotion(context, ref);
+  }
+
   MinesweeperConfig get _c => widget.config;
   int get _displaySeconds => _clockBase + elapsedSeconds;
 
@@ -59,7 +80,11 @@ class _PlayMinesweeperScreenState extends ConsumerState<PlayMinesweeperScreen>
     super.initState();
     initClock();
     _board = MinesweeperBoard(
-        width: _c.width, height: _c.height, mineCount: _c.mines, guessFree: _c.guessFree);
+        width: _c.width,
+        height: _c.height,
+        mineCount: _c.mines,
+        guessFree: _c.guessFree,
+        rng: ref.read(randomProvider).asRandom);
     final save = MinesweeperSave.load(ref.read(saveRepositoryProvider));
     if (save != null && save.config.statKey == _c.statKey) {
       _board.restore(mines: save.mineMap, revealed: save.revealed, flags: save.flagged);
@@ -81,6 +106,9 @@ class _PlayMinesweeperScreenState extends ConsumerState<PlayMinesweeperScreen>
     if (!_board.generated) {
       startClock();
     }
+    final before = [
+      for (var k = 0; k < _board.cells; k++) _board.reveal[k] == CellReveal.revealed,
+    ];
     final outcome = _board.reveal[i] == CellReveal.revealed && _board.count[i] > 0
         ? (_board.chord(i) ? RevealOutcome.mine : RevealOutcome.ok)
         : _board.revealCell(i);
@@ -89,9 +117,39 @@ class _PlayMinesweeperScreenState extends ConsumerState<PlayMinesweeperScreen>
     } else {
       Haptics.light(ref);
       setState(() {});
+      _rippleFrom(i, before);
       _persist();
       if (_board.isWon) _onWin();
     }
+  }
+
+  /// Opens the newly-revealed region outward from the tapped cell in rings,
+  /// 24ms each, capped at 320ms however big the clear — the design's signature
+  /// beat. The board state is already final; this only animates its arrival.
+  void _rippleFrom(int tapped, List<bool> before) {
+    final rings = <int, int>{};
+    var deepest = 0;
+    final w = _board.width;
+    final tc = tapped % w, tr = tapped ~/ w;
+    for (var k = 0; k < _board.cells; k++) {
+      if (before[k] || _board.reveal[k] != CellReveal.revealed) continue;
+      // Chebyshev distance: the flood spreads to eight neighbours at a time, so
+      // a ring is what opens together.
+      final ring = math.max((k % w - tc).abs(), (k ~/ w - tr).abs());
+      rings[k] = ring;
+      if (ring > deepest) deepest = ring;
+    }
+    // One cell opened, or reduce motion: nothing to stagger.
+    if (deepest == 0 || motionReduced) {
+      if (_cascadeRings.isNotEmpty) setState(() => _cascadeRings = const {});
+      return;
+    }
+    _cascadeRings = rings;
+    _cascadeDepth = deepest;
+    final ms = math.min(320, 24 * (deepest + 1));
+    play(MotionPreset.appear, duration: Duration(milliseconds: ms)).then((_) {
+      if (mounted) setState(() => _cascadeRings = const {});
+    });
   }
 
   void _flag(int i) {
@@ -150,7 +208,11 @@ class _PlayMinesweeperScreenState extends ConsumerState<PlayMinesweeperScreen>
   void _restart() {
     setState(() {
       _board = MinesweeperBoard(
-          width: _c.width, height: _c.height, mineCount: _c.mines, guessFree: _c.guessFree);
+          width: _c.width,
+          height: _c.height,
+          mineCount: _c.mines,
+          guessFree: _c.guessFree,
+          rng: ref.read(randomProvider).asRandom);
       _gameOver = false;
       _won = false;
       _explodedIndex = -1;
@@ -194,10 +256,8 @@ class _PlayMinesweeperScreenState extends ConsumerState<PlayMinesweeperScreen>
     }
   }
 
-  Future<void> _confirmExit() async {
-    final leave = await showExitConfirm(context, ref, progressSaved: !_gameOver && !_won);
-    if (leave && mounted) context.go(Routes.home);
-  }
+  Future<void> _confirmExit() => leaveGame(context,
+      progressSaved: !_gameOver && !_won, ended: _gameOver || _won);
 
   @override
   Widget build(BuildContext context) {
@@ -208,7 +268,8 @@ class _PlayMinesweeperScreenState extends ConsumerState<PlayMinesweeperScreen>
 
     return GameScaffold(
       onOverflow: _openPause,
-      onExitRequested: _confirmExit,
+      ended: _gameOver || _won,
+      progressSaved: !_gameOver && !_won,
       statusBar: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -230,6 +291,9 @@ class _PlayMinesweeperScreenState extends ConsumerState<PlayMinesweeperScreen>
         style: style,
         gameOver: _gameOver,
         explodedIndex: _explodedIndex,
+        cascade: _cascadeRings.isEmpty
+            ? null
+            : (ringOf: _cascadeRings, front: motionEased * (_cascadeDepth + 1)),
         onTapDown: _handleTapDown,
         onTapUp: _handleTapUp,
         onTapCancel: _cancelPress,
@@ -238,11 +302,14 @@ class _PlayMinesweeperScreenState extends ConsumerState<PlayMinesweeperScreen>
       controls: Padding(
         padding: const EdgeInsets.only(top: Insets.s4),
         child: finished
-            ? _EndOverlay(
-                won: _won,
-                time: formatClock(_displaySeconds),
-                onAgain: _restart,
-                onExit: () => context.go(Routes.home),
+            ? GameOverStrip(
+                title: _won ? 'Swept in ${formatClock(_displaySeconds)}' : 'Boom.',
+                titleColor: _won ? null : t.danger,
+                subtitle: _won ? 'Every safe cell open.' : 'Stepped on a mine.',
+                primaryLabel: 'Again',
+                onPrimary: _restart,
+                secondaryLabel: 'Change level',
+                onSecondary: () => leaveGame(context, ended: true),
               )
             : Row(
                 children: [
@@ -303,6 +370,7 @@ class _BoardView extends StatelessWidget {
     required this.style,
     required this.gameOver,
     required this.explodedIndex,
+    required this.cascade,
     required this.onTapDown,
     required this.onTapUp,
     required this.onTapCancel,
@@ -313,6 +381,7 @@ class _BoardView extends StatelessWidget {
   final MineStyle style;
   final bool gameOver;
   final int explodedIndex;
+  final ({Map<int, int> ringOf, double front})? cascade;
   final ValueChanged<int> onTapDown;
   final ValueChanged<int> onTapUp;
   final VoidCallback onTapCancel;
@@ -348,7 +417,7 @@ class _BoardView extends StatelessWidget {
               style: style,
               gameOver: gameOver,
               explodedIndex: explodedIndex,
-              reveal: 1,
+              cascade: cascade,
             ),
           ),
         );
@@ -357,33 +426,3 @@ class _BoardView extends StatelessWidget {
   }
 }
 
-class _EndOverlay extends StatelessWidget {
-  const _EndOverlay({required this.won, required this.time, required this.onAgain, required this.onExit});
-  final bool won;
-  final String time;
-  final VoidCallback onAgain;
-  final VoidCallback onExit;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.tokens;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(won ? 'Swept in $time' : 'Boom.',
-            style: DallyType.heading.copyWith(fontSize: 24, color: won ? t.textPrimary : t.danger)),
-        const SizedBox(height: 5),
-        Text(won ? 'Every safe cell open.' : 'Stepped on a mine.',
-            style: DallyType.body.copyWith(fontSize: 13, color: t.textMuted)),
-        const Gap(Insets.s4),
-        Row(
-          children: [
-            Expanded(child: PrimaryPill(label: 'Again', onPressed: onAgain)),
-            const Gap.h(Insets.s2 + 2),
-            Expanded(child: PrimaryPill.secondary(label: 'Change level', onPressed: onExit)),
-          ],
-        ),
-      ],
-    );
-  }
-}

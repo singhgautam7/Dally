@@ -4,28 +4,28 @@ import 'dart:math' as math;
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/storage/game_session.dart';
 import '../../../../core/game/game_registry.dart';
 import '../../../../core/game/session_recorder.dart';
-import '../../../../core/routing/routes.dart';
 import '../../../../core/game/how_to_launcher.dart';
 import '../../../../core/app_providers.dart';
 import '../../../../core/services/haptics.dart';
 import '../../../../core/theme/dally_tokens.dart';
+import '../../../../core/theme/motion.dart';
 import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../../../../core/theme/type_scale.dart';
 import '../../../../core/util/format.dart';
+import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/widgets/game_scaffold.dart';
 import '../../../../core/widgets/pause_sheet.dart';
 import '../../../../core/widgets/style_picker_sheet.dart';
-import '../../../../core/widgets/primary_pill.dart';
 import '../chess_config.dart';
 import 'chess_pieces.dart';
 import 'chess_pause_extras.dart';
 import 'chess_save.dart';
+import '../../../../core/widgets/game_over_strip.dart';
 
 class PlayChessScreen extends ConsumerStatefulWidget {
   const PlayChessScreen({super.key, required this.moduleId, required this.config});
@@ -36,7 +36,22 @@ class PlayChessScreen extends ConsumerStatefulWidget {
   ConsumerState<PlayChessScreen> createState() => _PlayChessScreenState();
 }
 
-class _PlayChessScreenState extends ConsumerState<PlayChessScreen> with WidgetsBindingObserver {
+class _PlayChessScreenState extends ConsumerState<PlayChessScreen>
+    with
+        WidgetsBindingObserver,
+        TickerProviderStateMixin<PlayChessScreen>,
+        MotionRunner<PlayChessScreen> {
+  @override
+  bool get motionReduced => _reduceMotion;
+  bool _reduceMotion = false;
+
+  /// The move currently sliding across the board, and what it took.
+  (Square, Square)? _slide;
+  Piece? _taken;
+
+  /// The king's square while it shakes for being in check.
+  Square? _checkShake;
+
   Position _pos = Chess.initial;
   final List<String> _history = [];
   Square? _sel;
@@ -58,13 +73,18 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen> with WidgetsB
     _p1White = switch (widget.config.player1Side) {
       ChessSide.white => true,
       ChessSide.black => false,
-      ChessSide.random => math.Random().nextBool(),
+      ChessSide.random => ref.read(randomProvider).nextBool(),
     };
     _whiteMs = widget.config.time.seconds * 1000;
     _blackMs = widget.config.time.seconds * 1000;
 
+    // A save belongs to the time control it was played under — its stored
+    // clocks are that game's clocks. Restoring a no-clock game's `whiteMs: 0`
+    // into a Blitz game flagged White on the first tick, which read as "Black
+    // wins on time" one move in. Every other game guards its restore the same
+    // way (Sudoku on difficulty, 2048 on size, Minesweeper on the config key).
     final save = ChessSave.load(ref.read(saveRepositoryProvider));
-    if (save != null) {
+    if (save != null && save.time == widget.config.time) {
       try {
         _pos = Chess.fromSetup(Setup.parseFen(save.fen));
         _history.addAll(save.history);
@@ -82,25 +102,56 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen> with WidgetsB
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reduceMotion = readReduceMotion(context, ref);
+  }
+
+  @override
   void dispose() {
     _clock?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
+  bool _clockPausedByLifecycle = false;
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) _stopClock();
+    // Backgrounding used to stop the clock for good: `_stopClock` clears
+    // `_clockStarted`, and nothing restarted it until the next move landed —
+    // so a side could think for free after a resume. Remember and restore.
+    if (state != AppLifecycleState.resumed) {
+      _clockPausedByLifecycle = _clockStarted;
+      _stopClock();
+    } else if (_clockPausedByLifecycle) {
+      _clockPausedByLifecycle = false;
+      if (_outcomeText == null) _startClock();
+    }
     super.didChangeAppLifecycleState(state);
   }
 
   bool get _hasClock => widget.config.time != ChessTime.none;
 
+  /// Whether the board is drawn from Black's side.
+  ///
+  /// Only "flip board each turn" moves the board. Face-to-face is the *other*
+  /// answer to the same problem and the design is explicit that the two do not
+  /// compose: "it replaces the flip rather than adding to it — the board never
+  /// moves, only the glyphs". A phone lying flat between two players must hold
+  /// one orientation; rotating it every move is precisely what that mode exists
+  /// to avoid.
   bool get _flipped {
-    if (widget.config.flipEachTurn || widget.config.faceToFace) {
-      return _pos.turn == Side.black;
-    }
+    if (widget.config.flipEachTurn) return _pos.turn == Side.black;
     return !_p1White;
+  }
+
+  /// The side sitting opposite the screen's orientation. In face-to-face its
+  /// pieces are drawn upside down, so the player across the table reads their
+  /// own upright. Null when the mode is off.
+  Side? get _rotatedSide {
+    if (!widget.config.faceToFace || widget.config.flipEachTurn) return null;
+    return _p1White ? Side.black : Side.white;
   }
 
   void _startClock() {
@@ -199,6 +250,14 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen> with WidgetsB
   void _doMove(Square from, Square to, Role? promotion) {
     final move = NormalMove(from: from, to: to, promotion: promotion);
     final san = _san(_pos, move);
+    // What stood on the destination *before* the move — the piece that is about
+    // to be taken. Castling is encoded king-onto-rook, so a same-colour
+    // occupant is a castle, not a capture, and nothing should fade.
+    final mover = _pos.board.pieceAt(from);
+    final occupant = _pos.board.pieceAt(to);
+    final taken = (occupant != null && mover != null && occupant.color != mover.color)
+        ? occupant
+        : null;
     if (!_clockStarted) _startClock();
     setState(() {
       _pos = _pos.play(move);
@@ -207,9 +266,29 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen> with WidgetsB
       _sel = null;
       _targets = SquareSet.empty;
       _promo = null;
+      _slide = (from, to);
+      _taken = taken;
     });
     Haptics.medium(ref);
     _persist();
+
+    // The piece travels; the taken one shrinks out beneath it. When that lands,
+    // a king left in check shakes — the one thing on this board the player must
+    // not miss.
+    play(MotionPreset.move).then((_) {
+      if (!mounted) return;
+      setState(() {
+        _slide = null;
+        _taken = null;
+      });
+      if (_pos.isCheck && !_pos.isGameOver) {
+        _checkShake = _pos.board.kingOf(_pos.turn);
+        play(MotionPreset.shake).then((_) {
+          if (mounted) setState(() => _checkShake = null);
+        });
+      }
+    });
+
     if (_pos.isGameOver) {
       _finish(_outcomeFor(_pos));
     }
@@ -355,10 +434,8 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen> with WidgetsB
     }
   }
 
-  Future<void> _confirmExit() async {
-    final leave = await showExitConfirm(context, ref, progressSaved: _outcomeText == null);
-    if (leave && mounted) context.go(Routes.home);
-  }
+  Future<void> _confirmExit() =>
+      leaveGame(context, ended: _outcomeText != null, progressSaved: false);
 
   @override
   Widget build(BuildContext context) {
@@ -371,7 +448,8 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen> with WidgetsB
 
     return GameScaffold(
       onOverflow: _openPause,
-      onExitRequested: _confirmExit,
+      ended: _outcomeText != null,
+      progressSaved: false,
       statusBar: _PlayerBar(
         side: topSide,
         p1White: _p1White,
@@ -382,12 +460,16 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen> with WidgetsB
       ),
       board: LayoutBuilder(
         builder: (context, c) {
-          final s = math.min(c.maxWidth, c.maxHeight * 0.86);
+          // The board takes whatever the bar under it leaves, rather than
+          // guessing at 86% of the height: on a 320×568 phone that guess was
+          // 10px short and the column overflowed.
+          final s = math.min(c.maxWidth, c.maxHeight);
           return Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              SizedBox.square(
-                dimension: s,
+              Flexible(
+                child: AspectRatio(
+                aspectRatio: 1,
                 child: _Board(
                   pos: _pos,
                   style: style,
@@ -395,9 +477,19 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen> with WidgetsB
                   targets: _targets,
                   last: _last,
                   legalDots: widget.config.legalDots,
+                  rotatedSide: _rotatedSide,
                   screenOf: _screen,
                   squareAt: _squareAt,
                   onTap: _tap,
+                  slide: _slide,
+                  slideProgress:
+                      motionPreset == MotionPreset.move ? motionEased : 1,
+                  taken: _taken,
+                  checkShake: _checkShake,
+                  shakeOffset: motionPreset == MotionPreset.shake
+                      ? motionEased.shakeOffset(amplitude: 5)
+                      : 0,
+                ),
                 ),
               ),
               const Gap(Insets.s3),
@@ -425,7 +517,14 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen> with WidgetsB
           : Padding(
               padding: const EdgeInsets.only(top: Insets.s3),
               child: _outcomeText != null
-                  ? _OutcomeOverlay(text: _outcomeText!, onRematch: _restart, onExit: () => context.go(Routes.home))
+                  ? GameOverStrip(
+                      title: _outcomeText!,
+                      subtitle: 'Good game.',
+                      primaryLabel: 'Rematch',
+                      onPrimary: _restart,
+                      secondaryLabel: 'Back',
+                      onSecondary: () => leaveGame(context, ended: true),
+                    )
                   : _BottomStatus(
                       pos: _pos, outcome: _outcomeText, config: widget.config.label,
                       history: _history, materialDiff: mat.diff),
@@ -592,7 +691,7 @@ class _BottomStatus extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
             color: t.surface,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: Radii.containerBR,
             border: t.surfaceNeedsOutline ? Border.all(color: t.border) : null,
           ),
           child: Row(
@@ -621,7 +720,7 @@ class _BottomStatus extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                 decoration: BoxDecoration(
-                    color: t.surfaceAlt, borderRadius: BorderRadius.circular(999)),
+                    color: t.surfaceAlt, borderRadius: Radii.pillBR),
                 child: Text(tag, style: DallyType.monoSm.copyWith(fontSize: 11, color: t.textMuted)),
               ),
             ],
@@ -652,9 +751,15 @@ class _Board extends StatelessWidget {
     required this.targets,
     required this.last,
     required this.legalDots,
+    required this.rotatedSide,
     required this.screenOf,
     required this.squareAt,
     required this.onTap,
+    required this.slide,
+    required this.slideProgress,
+    required this.taken,
+    required this.checkShake,
+    required this.shakeOffset,
   });
 
   final Position pos;
@@ -663,9 +768,25 @@ class _Board extends StatelessWidget {
   final SquareSet targets;
   final (Square, Square)? last;
   final bool legalDots;
+
+  /// Face-to-face: this side's pieces render rotated 180°.
+  final Side? rotatedSide;
+
   final (int, int) Function(int) screenOf;
   final Square Function(int, int) squareAt;
   final ValueChanged<Square> onTap;
+
+  /// The move in flight, `(from, to)`, or null. The moved piece is already at
+  /// `to` in [pos]; it is *drawn* back toward `from` by `1 - slideProgress`.
+  final (Square, Square)? slide;
+  final double slideProgress;
+
+  /// The piece being taken, drawn shrinking at the destination under the
+  /// arriving one.
+  final Piece? taken;
+
+  final Square? checkShake;
+  final double shakeOffset;
 
   @override
   Widget build(BuildContext context) {
@@ -686,6 +807,10 @@ class _Board extends StatelessWidget {
                 for (var row = 0; row < 8; row++)
                   for (var col = 0; col < 8; col++)
                     _squareTile(t, col, row, cell, checkSquare),
+                // The piece being taken, under the one arriving on top of it.
+                if (taken != null && slide != null)
+                  _pieceTile(slide!.$2, taken!, cell,
+                      scale: 1 - slideProgress, ignoreSlide: true),
                 // Pieces.
                 for (final (sq, piece) in pos.board.pieces)
                   _pieceTile(sq, piece, cell),
@@ -724,14 +849,35 @@ class _Board extends StatelessWidget {
     );
   }
 
-  Widget _pieceTile(Square sq, Piece piece, double cell) {
+  Widget _pieceTile(
+    Square sq,
+    Piece piece,
+    double cell, {
+    double scale = 1,
+    bool ignoreSlide = false,
+  }) {
     final (col, row) = screenOf(sq);
+    var offset = Offset.zero;
+    final move = slide;
+    if (!ignoreSlide && move != null && sq == move.$2 && slideProgress < 1) {
+      final (fromCol, fromRow) = screenOf(move.$1);
+      offset = Offset((fromCol - col) * cell, (fromRow - row) * cell) *
+          (1 - slideProgress);
+    }
+    if (sq == checkShake) offset += Offset(shakeOffset, 0);
+    Widget glyph = PieceGlyph(piece: piece, style: style, size: cell);
+    if (scale != 1) glyph = Transform.scale(scale: scale, child: glyph);
+    if (piece.color == rotatedSide) {
+      glyph = Transform.rotate(angle: math.pi, child: glyph);
+    }
     return Positioned(
       left: col * cell,
       top: row * cell,
       width: cell,
       height: cell,
-      child: IgnorePointer(child: PieceGlyph(piece: piece, style: style, size: cell)),
+      child: IgnorePointer(
+        child: Transform.translate(offset: offset, child: glyph),
+      ),
     );
   }
 
@@ -793,7 +939,7 @@ class _PromotionPicker extends StatelessWidget {
                     height: 60,
                     decoration: BoxDecoration(
                       color: t.surface,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: Radii.containerBR,
                       border: Border.all(color: t.border),
                     ),
                     child: PieceGlyph(
@@ -811,30 +957,3 @@ class _PromotionPicker extends StatelessWidget {
   }
 }
 
-class _OutcomeOverlay extends StatelessWidget {
-  const _OutcomeOverlay({required this.text, required this.onRematch, required this.onExit});
-  final String text;
-  final VoidCallback onRematch;
-  final VoidCallback onExit;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.tokens;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(text, style: DallyType.heading.copyWith(fontSize: 24, color: t.textPrimary)),
-        const SizedBox(height: 5),
-        Text('Good game.', style: DallyType.body.copyWith(fontSize: 13, color: t.textMuted)),
-        const Gap(Insets.s4),
-        Row(
-          children: [
-            Expanded(child: PrimaryPill(label: 'Rematch', onPressed: onRematch)),
-            const Gap.h(Insets.s2 + 2),
-            Expanded(child: PrimaryPill.secondary(label: 'Back', onPressed: onExit)),
-          ],
-        ),
-      ],
-    );
-  }
-}

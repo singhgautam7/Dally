@@ -3,7 +3,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/app_providers.dart';
 import '../../../../core/game/game_module.dart';
@@ -17,6 +16,7 @@ import '../../../../core/util/dally_random.dart';
 import '../../../../core/util/format.dart';
 import '../../../../core/util/game_clock.dart';
 import '../../../../core/widgets/dally_loading.dart';
+import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/widgets/primary_pill.dart';
 import '../../../../core/widgets/round_action_button.dart';
 import '../logic/calcudoku.dart';
@@ -157,6 +157,7 @@ class _PlayCalcudokuScreenState extends ConsumerState<PlayCalcudokuScreen>
     final conflict = findConflict(_values, puzzle.size);
 
     return MentalMathScaffold(
+      ended: _solved,
       module: widget.module,
       difficulty: _difficulty,
       progress: _values.where((v) => v != 0).length / _values.length,
@@ -191,7 +192,6 @@ class _PlayCalcudokuScreenState extends ConsumerState<PlayCalcudokuScreen>
                   border: t.border,
                   faint: t.textFaint,
                   danger: t.danger,
-                  surfaceAlt: t.surfaceAlt,
                 ),
               ),
             ),
@@ -226,7 +226,8 @@ class _PlayCalcudokuScreenState extends ConsumerState<PlayCalcudokuScreen>
                 const Gap.h(Insets.s2 + 2),
                 Expanded(
                   child: PrimaryPill.secondary(
-                      label: 'Back', onPressed: () => context.pop()),
+                      label: 'Back',
+                      onPressed: () => leaveGame(context, ended: true)),
                 ),
               ],
             )

@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/game/game_module.dart';
 import '../../../../core/theme/dally_tokens.dart';
 import '../../../../core/theme/motion.dart';
 import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/type_scale.dart';
+import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/widgets/how_to_play.dart';
 import '../../../../core/widgets/pause_sheet.dart';
 import '../../../../core/widgets/style_picker_sheet.dart';
+import '../../../../core/widgets/dally_sheet.dart';
+import '../../../../core/widgets/primary_pill.dart';
 
 /// The shared Quick Play shell: title left, overflow right, the result at the
 /// optical centre, and configuration in a bottom strip that dims to 40% during
@@ -17,7 +19,7 @@ import '../../../../core/widgets/style_picker_sheet.dart';
 ///
 /// These tools skip the setup screen — opening one *is* using it — so there is
 /// no stats slot in the header: there is nothing to time.
-class QuickPlayScaffold extends ConsumerWidget {
+class QuickPlayScaffold extends ConsumerStatefulWidget {
   const QuickPlayScaffold({
     super.key,
     required this.module,
@@ -51,59 +53,64 @@ class QuickPlayScaffold extends ConsumerWidget {
   final String? subtitle;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<QuickPlayScaffold> createState() => _QuickPlayScaffoldState();
+}
+
+class _QuickPlayScaffoldState extends ConsumerState<QuickPlayScaffold> {
+  final _back = GlobalKey<GameBackScopeState>();
+
+  @override
+  Widget build(BuildContext context) {
     final t = context.tokens;
-    return Scaffold(
-      backgroundColor: t.bg,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(Insets.s4 + 2, Insets.s4, Insets.s4 + 2, Insets.s4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(module.title,
-                            style: DallyType.title.copyWith(fontSize: 20, color: t.textPrimary)),
-                        if (subtitle != null) ...[
-                          const SizedBox(height: 2),
-                          Text(subtitle!,
-                              style: DallyType.monoSm.copyWith(fontSize: 11, color: t.textFaint)),
+    return GameBackScope(
+      key: _back,
+      onPause: () => _openSheet(context, ref),
+      child: Scaffold(
+        backgroundColor: t.bg,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(Insets.s4 + 2, Insets.s4, Insets.s4 + 2, Insets.s4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.module.title,
+                            style: DallyType.title.copyWith(fontSize: 20, color: t.textPrimary),
+                          ),
+                          if (widget.subtitle != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              widget.subtitle!,
+                              style: DallyType.monoSm.copyWith(fontSize: 11, color: t.textFaint),
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-                  ),
-                  Semantics(
-                    button: true,
-                    label: 'More',
-                    child: InkResponse(
-                      onTap: () => _openSheet(context, ref),
-                      radius: 24,
-                      child: SizedBox(
-                        width: 40,
-                        height: 40,
-                        child: Icon(Icons.more_vert_rounded, color: t.textFaint, size: 20),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              Expanded(child: Center(child: RepaintBoundary(child: result))),
-              // The strip dims and stops taking taps while the beat plays, so a
-              // config change can never land mid-animation.
-              IgnorePointer(
-                ignoring: busy,
-                child: AnimatedOpacity(
-                  duration: Motion.fade,
-                  opacity: busy ? 0.4 : 1,
-                  child: controls,
+                    OverflowButton(onTap: () => _openSheet(context, ref)),
+                  ],
                 ),
-              ),
-            ],
+                Expanded(
+                  child: Center(child: RepaintBoundary(child: widget.result)),
+                ),
+                // The strip dims and stops taking taps while the beat plays, so a
+                // config change can never land mid-animation.
+                IgnorePointer(
+                  ignoring: widget.busy,
+                  child: AnimatedOpacity(
+                    duration: Motion.fade,
+                    opacity: widget.busy ? 0.4 : 1,
+                    child: widget.controls,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -111,24 +118,31 @@ class QuickPlayScaffold extends ConsumerWidget {
   }
 
   Future<void> _openSheet(BuildContext context, WidgetRef ref) async {
-    final howTo = module.buildHowToPlay(context);
-    final styleRow = stylePreviewBuilder == null
+    _back.currentState?.notePauseSeen();
+    final howTo = widget.module.buildHowToPlay(context);
+    final styleRow = widget.stylePreviewBuilder == null
         ? null
-        : stylePickerRow(context, ref,
-            module: module, previewBuilder: stylePreviewBuilder!);
-    final result = await showQuickPlaySheet(
+        : stylePickerRow(
+            context,
+            ref,
+            module: widget.module,
+            previewBuilder: widget.stylePreviewBuilder!,
+          );
+    final choice = await showQuickPlaySheet(
       context,
       ref,
-      title: module.title,
-      configLine: module.tagline,
-      clearLabel: clearLabel,
+      title: widget.module.title,
+      configLine: widget.module.tagline,
+      clearLabel: widget.clearLabel,
       onHowToPlay: howTo == null
           ? null
-          : () => showHowTo(context, howTo, subtitle: module.tagline),
+          : () => showHowTo(context, howTo, subtitle: widget.module.tagline),
       extraRows: [?styleRow],
     );
-    if (result == PauseResult.restart) onClear();
-    if (result == PauseResult.exit && context.mounted) context.pop();
+    if (!context.mounted) return;
+    if (choice == PauseResult.restart) widget.onClear();
+    // A Quick Tool is never mid-game, so leaving needs no confirmation.
+    if (choice == PauseResult.exit) await leaveGame(context, ended: true);
   }
 }
 
@@ -143,21 +157,16 @@ Future<PauseResult?> showQuickPlaySheet(
   VoidCallback? onHowToPlay,
   List<Widget> extraRows = const [],
 }) {
-  final t = context.tokens;
-  return showModalBottomSheet<PauseResult>(
-    context: context,
-    backgroundColor: t.surface,
-    barrierColor: Colors.black.withValues(alpha: 0.6),
+  return showDallySheet<PauseResult>(
+    context,
     isScrollControlled: true,
-    showDragHandle: true,
-    shape: RoundedRectangleBorder(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      side: BorderSide(color: t.border),
-    ),
     builder: (sheetContext) {
       final t = sheetContext.tokens;
       return SafeArea(
-        child: Padding(
+        // Same reason as the game pause sheet: an open-ended row list on a
+        // short phone or at a large text scale must scroll, not clip.
+        child: SingleChildScrollView(
+          child: Padding(
           padding: const EdgeInsets.fromLTRB(Insets.s5, 0, Insets.s5, Insets.s5),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -165,8 +174,7 @@ Future<PauseResult?> showQuickPlaySheet(
             children: [
               Text(title, style: DallyType.title.copyWith(color: t.textPrimary)),
               const SizedBox(height: 4),
-              Text(configLine,
-                  style: DallyType.body.copyWith(fontSize: 12, color: t.textFaint)),
+              Text(configLine, style: DallyType.body.copyWith(fontSize: 12, color: t.textFaint)),
               const Gap(Insets.s4),
               if (onHowToPlay != null)
                 PauseRow(
@@ -187,6 +195,7 @@ Future<PauseResult?> showQuickPlaySheet(
                 onTap: () => Navigator.of(sheetContext).pop(PauseResult.exit),
               ),
             ],
+          ),
           ),
         ),
       );

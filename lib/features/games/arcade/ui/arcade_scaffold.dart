@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/game/game_module.dart';
 import '../../../../core/theme/dally_tokens.dart';
 import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/type_scale.dart';
+import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/widgets/how_to_play.dart';
 import '../../../../core/widgets/pause_sheet.dart';
 import '../../../../core/widgets/style_picker_sheet.dart';
+import '../../../../core/widgets/primary_pill.dart';
 
 /// The shared Tiny Arcade shell.
 ///
@@ -19,7 +20,7 @@ import '../../../../core/widgets/style_picker_sheet.dart';
 ///
 /// Death raises a card *inside* the arena, so the board that killed you stays
 /// visible behind it.
-class ArcadeScaffold extends ConsumerWidget {
+class ArcadeScaffold extends ConsumerStatefulWidget {
   const ArcadeScaffold({
     super.key,
     required this.module,
@@ -63,10 +64,22 @@ class ArcadeScaffold extends ConsumerWidget {
   final Widget? footer;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ArcadeScaffold> createState() => _ArcadeScaffoldState();
+}
+
+class _ArcadeScaffoldState extends ConsumerState<ArcadeScaffold> {
+  final _back = GlobalKey<GameBackScopeState>();
+
+  @override
+  Widget build(BuildContext context) {
     final t = context.tokens;
-    return PopScope(
-      canPop: true,
+    return GameBackScope(
+      key: _back,
+      ended: widget.state == ArcadeRunState.over,
+      onPause: () {
+        widget.onPause();
+        _openSheet(context, ref);
+      },
       child: Scaffold(
         backgroundColor: t.bg,
         body: SafeArea(
@@ -77,25 +90,13 @@ class ArcadeScaffold extends ConsumerWidget {
               children: [
                 Row(
                   children: [
-                    Text(score,
+                    Text(widget.score,
                         style: DallyType.monoLg.copyWith(fontSize: 22, color: t.textPrimary)),
                     const Spacer(),
-                    Semantics(
-                      button: true,
-                      label: 'More',
-                      child: InkResponse(
-                        onTap: () {
-                          onPause();
-                          _openSheet(context, ref);
-                        },
-                        radius: 24,
-                        child: SizedBox(
-                          width: 40,
-                          height: 40,
-                          child: Icon(Icons.more_vert_rounded, color: t.textFaint, size: 20),
-                        ),
-                      ),
-                    ),
+                    OverflowButton(onTap: () {
+                      widget.onPause();
+                      _openSheet(context, ref);
+                    }),
                   ],
                 ),
                 const Gap(Insets.s2),
@@ -112,17 +113,17 @@ class ArcadeScaffold extends ConsumerWidget {
                           borderRadius: Radii.containerBR,
                           child: Stack(
                             children: [
-                              Positioned.fill(child: RepaintBoundary(child: arena(context, box))),
-                              if (state == ArcadeRunState.ready && readyHint != null)
-                                Positioned.fill(child: _ReadyHint(hint: readyHint!)),
-                              if (state == ArcadeRunState.over)
+                              Positioned.fill(child: RepaintBoundary(child: widget.arena(context, box))),
+                              if (widget.state == ArcadeRunState.ready && widget.readyHint != null)
+                                Positioned.fill(child: _ReadyHint(hint: widget.readyHint!)),
+                              if (widget.state == ArcadeRunState.over)
                                 Positioned.fill(
                                   child: _DeathCard(
-                                    score: score,
-                                    best: best,
-                                    isNewBest: isNewBest,
-                                    onAgain: onRestart,
-                                    onLeave: () => context.pop(),
+                                    score: widget.score,
+                                    best: widget.best,
+                                    isNewBest: widget.isNewBest,
+                                    onAgain: widget.onRestart,
+                                    onLeave: () => leaveGame(context, ended: true),
                                   ),
                                 ),
                             ],
@@ -132,9 +133,9 @@ class ArcadeScaffold extends ConsumerWidget {
                     },
                   ),
                 ),
-                if (footer != null) ...[
+                if (widget.footer != null) ...[
                   const Gap(Insets.s3),
-                  footer!,
+                  widget.footer!,
                 ],
               ],
             ),
@@ -145,31 +146,34 @@ class ArcadeScaffold extends ConsumerWidget {
   }
 
   Future<void> _openSheet(BuildContext context, WidgetRef ref) async {
-    final howTo = module.buildHowToPlay(context);
-    final styleRow = stylePreviewBuilder == null
+    _back.currentState?.notePauseSeen();
+    final howTo = widget.module.buildHowToPlay(context);
+    final styleRow = widget.stylePreviewBuilder == null
         ? null
         : stylePickerRow(context, ref,
-            module: module, previewBuilder: stylePreviewBuilder!, onClosed: onResume);
+            module: widget.module,
+            previewBuilder: widget.stylePreviewBuilder!,
+            onClosed: widget.onResume);
     final result = await showPauseSheet(
       context,
       ref,
-      title: module.title,
-      configLine: module.tagline,
+      title: widget.module.title,
+      configLine: widget.module.tagline,
       timeLabel: '',
       onHowToPlay: howTo == null
           ? null
-          : () => showHowTo(context, howTo, subtitle: module.tagline),
+          : () => showHowTo(context, howTo, subtitle: widget.module.tagline),
       extraRows: [?styleRow],
     );
     if (!context.mounted) return;
     switch (result) {
       case PauseResult.restart:
-        onRestart();
+        widget.onRestart();
       case PauseResult.exit:
-        context.pop();
+        await leaveGame(context, ended: widget.state == ArcadeRunState.over);
       case PauseResult.resume:
       case null:
-        onResume();
+        widget.onResume();
     }
   }
 }

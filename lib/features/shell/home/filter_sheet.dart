@@ -10,6 +10,7 @@ import '../../../core/widgets/dally_toggle.dart';
 import '../../../core/widgets/filter_chip_pill.dart';
 import '../../../core/widgets/primary_pill.dart';
 import 'home_filter.dart';
+import '../../../core/widgets/dally_sheet.dart';
 
 /// The More sheet: category, players, length and "never played only".
 ///
@@ -17,17 +18,9 @@ import 'home_filter.dart';
 /// to empty the grid, and the confirm button always states the count it will
 /// show.
 Future<void> showFilterSheet(BuildContext context, WidgetRef ref) {
-  final t = context.tokens;
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: t.surface,
-    barrierColor: Colors.black.withValues(alpha: 0.6),
+  return showDallySheet<void>(
+    context,
     isScrollControlled: true,
-    showDragHandle: true,
-    shape: RoundedRectangleBorder(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      side: BorderSide(color: t.border),
-    ),
     builder: (_) => const _FilterSheetBody(),
   );
 }

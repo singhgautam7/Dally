@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/game/game_module.dart';
 import '../../../../core/theme/dally_tokens.dart';
+import '../../../../core/theme/motion.dart';
 import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/type_scale.dart';
 import '../../../../core/widgets/how_to_play.dart';
+import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/widgets/pause_sheet.dart';
 import '../math_difficulty.dart';
+import '../../../../core/widgets/primary_pill.dart';
 
 /// A stat the drill has earned. Metrics are opt-in per game and never render a
 /// zero for something unearned — pass null and the cell shows "—".
@@ -24,7 +26,7 @@ class MathStat {
 ///
 /// Difficulty is never chosen inside a game — it comes from the home section
 /// header — so there is no difficulty control here.
-class MentalMathScaffold extends ConsumerWidget {
+class MentalMathScaffold extends ConsumerStatefulWidget {
   const MentalMathScaffold({
     super.key,
     required this.module,
@@ -35,6 +37,7 @@ class MentalMathScaffold extends ConsumerWidget {
     required this.progress,
     required this.onRestart,
     this.feedback,
+    this.ended = false,
   });
 
   final GameModule module;
@@ -52,11 +55,23 @@ class MentalMathScaffold extends ConsumerWidget {
   /// wrong. Never a shake, never confetti, never sound.
   final Color? feedback;
 
+  /// True once the drill has finished — back then goes straight home.
+  final bool ended;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MentalMathScaffold> createState() => _MentalMathScaffoldState();
+}
+
+class _MentalMathScaffoldState extends ConsumerState<MentalMathScaffold> {
+  final _back = GlobalKey<GameBackScopeState>();
+
+  @override
+  Widget build(BuildContext context) {
     final t = context.tokens;
-    return PopScope(
-      canPop: true,
+    return GameBackScope(
+      key: _back,
+      onPause: () => _openSheet(context, ref),
+      ended: widget.ended,
       child: Scaffold(
         backgroundColor: t.bg,
         body: SafeArea(
@@ -67,7 +82,7 @@ class MentalMathScaffold extends ConsumerWidget {
               children: [
                 Row(
                   children: [
-                    for (final stat in stats) ...[
+                    for (final stat in widget.stats) ...[
                       Padding(
                         padding: const EdgeInsets.only(right: Insets.s5),
                         child: Column(
@@ -87,41 +102,32 @@ class MentalMathScaffold extends ConsumerWidget {
                       ),
                     ],
                     const Spacer(),
-                    Semantics(
-                      button: true,
-                      label: 'More',
-                      child: InkResponse(
-                        onTap: () => _openSheet(context, ref),
-                        radius: 24,
-                        child: SizedBox(
-                          width: 40,
-                          height: 40,
-                          child: Icon(Icons.more_vert_rounded, color: t.textFaint, size: 20),
-                        ),
-                      ),
-                    ),
+                    OverflowButton(onTap: () => _openSheet(context, ref)),
                   ],
                 ),
                 const Gap(Insets.s3),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(2),
                   child: LinearProgressIndicator(
-                    value: progress,
+                    value: widget.progress,
                     minHeight: 3,
                     backgroundColor: t.surfaceAlt,
                     valueColor: AlwaysStoppedAnimation(t.accent),
                   ),
                 ),
-                Expanded(child: Center(child: RepaintBoundary(child: prompt))),
-                // The 140ms wash is the whole feedback vocabulary.
+                Expanded(child: Center(child: RepaintBoundary(child: widget.prompt))),
+                // One settle-length wash is the whole feedback vocabulary.
                 AnimatedContainer(
-                  duration: const Duration(milliseconds: 140),
+                  duration: reduceMotionEnabled(context, ref)
+                      ? Duration.zero
+                      : MotionPreset.settle.duration,
+                  curve: MotionPreset.settle.curve,
                   decoration: BoxDecoration(
-                    color: feedback?.withValues(alpha: 0.16) ?? Colors.transparent,
+                    color: widget.feedback?.withValues(alpha: 0.16) ?? Colors.transparent,
                     borderRadius: Radii.containerBR,
                   ),
                   padding: const EdgeInsets.all(Insets.s1),
-                  child: answerSurface,
+                  child: widget.answerSurface,
                 ),
               ],
             ),
@@ -132,19 +138,22 @@ class MentalMathScaffold extends ConsumerWidget {
   }
 
   Future<void> _openSheet(BuildContext context, WidgetRef ref) async {
-    final howTo = module.buildHowToPlay(context);
+    _back.currentState?.notePauseSeen();
+    final howTo = widget.module.buildHowToPlay(context);
     final result = await showPauseSheet(
       context,
       ref,
-      title: module.title,
-      configLine: '${difficulty.label} · set on home',
+      title: widget.module.title,
+      configLine: '${widget.difficulty.label} · set on home',
       timeLabel: '',
       onHowToPlay: howTo == null
           ? null
-          : () => showHowTo(context, howTo, subtitle: difficulty.label),
+          : () => showHowTo(context, howTo, subtitle: widget.difficulty.label),
     );
     if (!context.mounted) return;
-    if (result == PauseResult.restart) onRestart();
-    if (result == PauseResult.exit) context.pop();
+    if (result == PauseResult.restart) widget.onRestart();
+    if (result == PauseResult.exit) {
+      await leaveGame(context, ended: widget.ended);
+    }
   }
 }

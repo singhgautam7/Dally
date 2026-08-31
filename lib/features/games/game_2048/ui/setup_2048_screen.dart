@@ -13,6 +13,7 @@ import '../../../../core/widgets/setup_scaffold.dart';
 import '../game_2048_config.dart';
 import '../logic/board_2048.dart';
 import 'game_2048_save.dart';
+import '../../../../core/theme/spacing.dart';
 
 /// 2048 setup — board size, best-for-config line, Continue/Start.
 class Setup2048Screen extends ConsumerStatefulWidget {
@@ -66,14 +67,16 @@ class _Setup2048ScreenState extends ConsumerState<Setup2048Screen> {
 }
 
 /// A small live board preview (a real random position at the chosen size).
-class _Preview extends StatelessWidget {
+class _Preview extends ConsumerWidget {
   const _Preview({required this.size});
   final int size;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final t = context.tokens;
-    final board = Board2048(size: size)..start();
+    // Even a preview draws from the shared source: a board that reshuffled
+    // itself on every rebuild would be the setup screen flickering at you.
+    final board = Board2048(size: size, rng: ref.read(randomProvider).asRandom)..start();
     const dim = 190.0;
     const pad = 8.0;
     final gap = size <= 4 ? 6.0 : 4.0;
@@ -82,7 +85,7 @@ class _Preview extends StatelessWidget {
       width: dim,
       height: dim,
       padding: const EdgeInsets.all(pad),
-      decoration: BoxDecoration(color: t.surface, borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(color: t.surface, borderRadius: Radii.containerBR),
       child: Stack(
         children: [
           for (var r = 0; r < size; r++)

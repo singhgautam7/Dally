@@ -2,11 +2,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/storage/game_session.dart';
 import '../../../../core/game/session_recorder.dart';
-import '../../../../core/routing/routes.dart';
 import '../../../../core/game/how_to_launcher.dart';
 import '../../../../core/app_providers.dart';
 import '../../../../core/services/haptics.dart';
@@ -15,12 +13,13 @@ import '../../../../core/theme/motion.dart';
 import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/type_scale.dart';
 import '../../../../core/util/format.dart';
+import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/widgets/game_scaffold.dart';
 import '../../../../core/widgets/pause_sheet.dart';
-import '../../../../core/widgets/primary_pill.dart';
 import '../game_2048_config.dart';
 import '../logic/board_2048.dart';
 import 'game_2048_save.dart';
+import '../../../../core/widgets/game_over_strip.dart';
 
 class Play2048Screen extends ConsumerStatefulWidget {
   const Play2048Screen({super.key, required this.moduleId, required this.config});
@@ -48,7 +47,7 @@ class _Play2048ScreenState extends ConsumerState<Play2048Screen> {
   @override
   void initState() {
     super.initState();
-    _board = Board2048(size: _size);
+    _board = Board2048(size: _size, rng: ref.read(randomProvider).asRandom);
     final save = Game2048Save.load(ref.read(saveRepositoryProvider));
     if (save != null && save.size == _size) {
       _board.loadValues(save.values, save.score);
@@ -80,8 +79,9 @@ class _Play2048ScreenState extends ConsumerState<Play2048Screen> {
 
     Haptics.light(ref);
     setState(() => _ghosts = res.mergedAway);
-    // Drop the merged-away ghosts once they've slid into place.
-    Future.delayed(Motion.quick, () {
+    // Drop the merged-away ghosts once they've slid into place — the same beat
+    // the slide itself runs on, so the ghost never outlives its own animation.
+    Future.delayed(MotionPreset.move.duration, () {
       if (mounted) setState(() => _ghosts = const []);
     });
 
@@ -111,7 +111,7 @@ class _Play2048ScreenState extends ConsumerState<Play2048Screen> {
 
   void _restart() {
     setState(() {
-      _board = Board2048(size: _size)..start();
+      _board = Board2048(size: _size, rng: ref.read(randomProvider).asRandom)..start();
       _ghosts = const [];
       _wonDismissed = false;
       _undoValues = null;
@@ -180,9 +180,17 @@ class _Play2048ScreenState extends ConsumerState<Play2048Screen> {
     }
   }
 
-  Future<void> _confirmExit() async {
-    final leave = await showExitConfirm(context, ref, progressSaved: true);
-    if (leave && mounted) context.go(Routes.home);
+  Future<void> _confirmExit() =>
+      leaveGame(context, ended: _showWin || _gameOver, progressSaved: true);
+
+  void _swipe(DragEndDetails d) {
+    final v = d.velocity.pixelsPerSecond;
+    if (v.distance < 60) return;
+    if (v.dx.abs() > v.dy.abs()) {
+      _move(v.dx > 0 ? Move2048.right : Move2048.left);
+    } else {
+      _move(v.dy > 0 ? Move2048.down : Move2048.up);
+    }
   }
 
   @override
@@ -190,23 +198,38 @@ class _Play2048ScreenState extends ConsumerState<Play2048Screen> {
     final t = context.tokens;
     return GameScaffold(
       onOverflow: _openPause,
-      onExitRequested: _confirmExit,
+      ended: _showWin || _gameOver,
+      progressSaved: true,
       statusBar: _ScoreRow(score: _board.score, best: _best.toInt()),
+      // Swiping works over the whole screen, not only the board — the empty
+      // strip under it is where a thumb naturally lands.
+      onPanEnd: _showWin || _gameOver ? null : _swipe,
       board: _Board(
         board: _board,
         ghosts: _ghosts,
-        onMove: _move,
-        interactive: !_showWin && !_gameOver,
+        reduced: reduceMotionEnabled(context, ref),
       ),
       controls: Padding(
         padding: const EdgeInsets.only(top: Insets.s4),
         child: _showWin
-            ? _WinOverlay(onKeepGoing: () => setState(() {
+            ? GameOverStrip(
+                title: '2048.',
+                subtitle: 'The board\'s not full. 4096 is right there.',
+                primaryLabel: 'Keep going',
+                onPrimary: () => setState(() {
                   _wonDismissed = true;
                   _persist();
-                }), onNewGame: _restart)
+                }),
+                secondaryLabel: 'New game',
+                onSecondary: _restart,
+              )
             : _gameOver
-                ? _GameOverOverlay(score: _board.score, onNewGame: _restart)
+                ? GameOverStrip(
+                    title: 'Out of moves.',
+                    subtitle: 'Final score ${formatGrouped(_board.score)}.',
+                    primaryLabel: 'New game',
+                    onPrimary: _restart,
+                  )
                 : _Controls(canUndo: _undoValues != null, onUndo: _undo, onRestart: _restart, tokens: t),
       ),
     );
@@ -241,7 +264,7 @@ class _ScoreRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: t.surface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: Radii.containerBR,
         border: t.surfaceBorder,
       ),
       child: Column(
@@ -260,17 +283,13 @@ class _ScoreRow extends StatelessWidget {
 // ── Board with animated tiles ──────────────────────────────────────────────
 
 class _Board extends StatelessWidget {
-  const _Board({
-    required this.board,
-    required this.ghosts,
-    required this.onMove,
-    required this.interactive,
-  });
+  const _Board({required this.board, required this.ghosts, required this.reduced});
 
   final Board2048 board;
   final List<Tile2048> ghosts;
-  final ValueChanged<Move2048> onMove;
-  final bool interactive;
+
+  /// Collapses every beat on the board to instant.
+  final bool reduced;
 
   @override
   Widget build(BuildContext context) {
@@ -287,19 +306,6 @@ class _Board extends StatelessWidget {
 
         return SizedBox.square(
           dimension: s,
-          child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onPanEnd: interactive
-              ? (d) {
-                  final v = d.velocity.pixelsPerSecond;
-                  if (v.distance < 60) return;
-                  if (v.dx.abs() > v.dy.abs()) {
-                    onMove(v.dx > 0 ? Move2048.right : Move2048.left);
-                  } else {
-                    onMove(v.dy > 0 ? Move2048.down : Move2048.up);
-                  }
-                }
-              : null,
           child: Container(
             decoration: BoxDecoration(
               color: t.surface,
@@ -329,20 +335,20 @@ class _Board extends StatelessWidget {
                     // Same key its live tile used last frame, so it slides from
                     // its old cell into the merge target before vanishing.
                     key: ValueKey(g.id),
-                    duration: Motion.quick,
-                    curve: Motion.curve,
+                    duration: reduced ? Duration.zero : MotionPreset.move.duration,
+                    curve: MotionPreset.move.curve,
                     left: left(g.col),
                     top: top(g.row),
                     width: cell,
                     height: cell,
-                    child: _TileBox(value: g.value, cell: cell, tokens: t),
+                    child: _TileBox(value: g.value, cell: cell, tokens: t, reduced: reduced),
                   ),
                 // Live tiles.
                 for (final tile in board.tiles)
                   AnimatedPositioned(
                     key: ValueKey(tile.id),
-                    duration: Motion.quick,
-                    curve: Motion.curve,
+                    duration: reduced ? Duration.zero : MotionPreset.move.duration,
+                    curve: MotionPreset.move.curve,
                     left: left(tile.col),
                     top: top(tile.row),
                     width: cell,
@@ -351,6 +357,7 @@ class _Board extends StatelessWidget {
                       value: tile.value,
                       cell: cell,
                       tokens: t,
+                      reduced: reduced,
                       pop: tile.mergedThisTurn,
                       spawn: tile.spawnedThisTurn,
                     ),
@@ -358,19 +365,21 @@ class _Board extends StatelessWidget {
               ],
             ),
           ),
-        ),
         );
       },
     );
   }
 }
 
-/// A single tile, with a subtle settle (merge) or fade-in (spawn).
+/// A single tile. A spawning tile grows in on `appear`; a merged one takes the
+/// `pop` beat. Both come from the shared presets rather than hand-picked
+/// tweens, and both collapse to instant when motion is reduced.
 class _TileBox extends StatefulWidget {
   const _TileBox({
     required this.value,
     required this.cell,
     required this.tokens,
+    required this.reduced,
     this.pop = false,
     this.spawn = false,
   });
@@ -378,6 +387,7 @@ class _TileBox extends StatefulWidget {
   final int value;
   final double cell;
   final DallyTokens tokens;
+  final bool reduced;
   final bool pop;
   final bool spawn;
 
@@ -385,20 +395,18 @@ class _TileBox extends StatefulWidget {
   State<_TileBox> createState() => _TileBoxState();
 }
 
-class _TileBoxState extends State<_TileBox> with SingleTickerProviderStateMixin {
-  late final AnimationController _c =
-      AnimationController(vsync: this, duration: Motion.quick);
-  late Animation<double> _scale =
-      Tween(begin: widget.spawn ? 0.5 : (widget.pop ? 0.86 : 1.0), end: 1.0)
-          .animate(CurvedAnimation(parent: _c, curve: Motion.emphasis));
+class _TileBoxState extends State<_TileBox>
+    with TickerProviderStateMixin<_TileBox>, MotionRunner<_TileBox> {
+  @override
+  bool get motionReduced => widget.reduced;
 
   @override
   void initState() {
     super.initState();
-    if (widget.spawn || widget.pop) {
-      _c.forward();
-    } else {
-      _c.value = 1;
+    if (widget.spawn) {
+      play(MotionPreset.appear);
+    } else if (widget.pop) {
+      play(MotionPreset.pop);
     }
   }
 
@@ -406,18 +414,15 @@ class _TileBoxState extends State<_TileBox> with SingleTickerProviderStateMixin 
   void didUpdateWidget(_TileBox oldWidget) {
     super.didUpdateWidget(oldWidget);
     // A persistent (keyed) tile whose value just doubled should re-pop.
-    if (widget.value != oldWidget.value && widget.pop) {
-      _scale = Tween(begin: 0.86, end: 1.0)
-          .animate(CurvedAnimation(parent: _c, curve: Motion.emphasis));
-      _c.forward(from: 0);
-    }
+    if (widget.value != oldWidget.value && widget.pop) play(MotionPreset.pop);
   }
 
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
+  /// `appear` grows from half size; `pop` overshoots and settles.
+  double get _scale => switch (motionPreset) {
+        MotionPreset.appear => 0.5 + 0.5 * motionEased,
+        MotionPreset.pop => motionEased.popScale(),
+        _ => 1,
+      };
 
   int _rampIndex(int value) {
     var v = value, i = 0;
@@ -437,7 +442,7 @@ class _TileBoxState extends State<_TileBox> with SingleTickerProviderStateMixin 
         : widget.value < 1000
             ? widget.cell * 0.34
             : widget.cell * 0.26;
-    return ScaleTransition(
+    return Transform.scale(
       scale: _scale,
       child: Container(
         decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(widget.cell * 0.14)),
@@ -510,52 +515,4 @@ class _Controls extends StatelessWidget {
   }
 }
 
-class _WinOverlay extends StatelessWidget {
-  const _WinOverlay({required this.onKeepGoing, required this.onNewGame});
-  final VoidCallback onKeepGoing;
-  final VoidCallback onNewGame;
 
-  @override
-  Widget build(BuildContext context) {
-    final t = context.tokens;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('2048.', style: DallyType.heading.copyWith(color: t.textPrimary)),
-        const SizedBox(height: 4),
-        Text('The board\'s not full. 4096 is right there.',
-            style: DallyType.body.copyWith(fontSize: 13, color: t.textMuted)),
-        const Gap(Insets.s4),
-        Row(
-          children: [
-            Expanded(child: PrimaryPill(label: 'Keep going', onPressed: onKeepGoing)),
-            const Gap.h(Insets.s2 + 2),
-            Expanded(child: PrimaryPill.secondary(label: 'New game', onPressed: onNewGame)),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _GameOverOverlay extends StatelessWidget {
-  const _GameOverOverlay({required this.score, required this.onNewGame});
-  final int score;
-  final VoidCallback onNewGame;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.tokens;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Out of moves.', style: DallyType.heading.copyWith(color: t.textPrimary)),
-        const SizedBox(height: 4),
-        Text('Final score ${formatGrouped(score)}.',
-            style: DallyType.body.copyWith(fontSize: 13, color: t.textMuted)),
-        const Gap(Insets.s4),
-        PrimaryPill(label: 'New game', onPressed: onNewGame),
-      ],
-    );
-  }
-}
