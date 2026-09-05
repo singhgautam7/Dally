@@ -75,6 +75,9 @@ class UndercoverGame {
     required this.pair,
     required this.players,
     required List<int> order,
+    // `this._order` is what the lint asks for, but a named parameter may not
+    // have a private name — it would be undeclarable by callers.
+    // ignore: prefer_initializing_formals
   }) : _order = order;
 
   /// Deals [names] into roles.

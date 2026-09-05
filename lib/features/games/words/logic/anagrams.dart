@@ -37,6 +37,9 @@ class AnagramRound {
     required this.answer,
     required this.scrambled,
     required bool Function(String) isWord,
+    // `this._isWord` is what the lint asks for, but a named parameter may not
+    // have a private name — it would be undeclarable by callers.
+    // ignore: prefer_initializing_formals
   }) : _isWord = isWord;
 
   final String answer;

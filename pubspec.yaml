@@ -4,7 +4,9 @@ publish_to: 'none'
 version: 0.3.0+3
 
 environment:
-  sdk: ^3.11.5
+  # 3.12 is the real floor: shared_preferences_android 2.4.24+ (the built-in
+  # Kotlin migration, needed for AGP 9) requires it.
+  sdk: ^3.12.0
 
 dependencies:
   flutter:
@@ -18,6 +20,11 @@ dependencies:
   shared_preferences: 2.5.5
   # Bundled vector glyphs / style sets
   flutter_svg: 2.3.0
+  # Material's adaptive icons (the back button) name CupertinoIcons glyphs, so
+  # the icon tree-shaker looks for that font whether or not iOS is in play.
+  # Without the package it warns on every build; with it, tree-shaking keeps
+  # only the glyphs actually reachable.
+  cupertino_icons: 1.0.8
   # Immutable models + safe (de)serialisation
   freezed_annotation: 3.1.0
   json_annotation: 4.12.0
@@ -26,7 +33,7 @@ dependencies:
   dartchess: 0.13.1
   # Bundled SFX playback (dice roll). Offline assets only — no network, no
   # analytics; pinned like every other dependency for the 3.11 SDK.
-  audioplayers: 6.7.1
+  audioplayers: 6.8.1
 
 dev_dependencies:
   flutter_test:
