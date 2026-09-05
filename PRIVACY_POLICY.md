@@ -29,7 +29,7 @@ All of it stays in Dally's private app storage, readable only by Dally:
 | Saved games in progress | So you can resume a board later |
 | Personal bests and statistics | So the Stats screen can show your records |
 | Play history | The most recent 200 finished sessions, for the Activity screen |
-| Player names you type | E.g. in Dots & Boxes or Mafia — stored only for that session's setup |
+| Player names you type | E.g. in Dots & Boxes or Undercover — stored only for that session's setup |
 
 This data never leaves the device. Uninstalling Dally deletes all of it.
 

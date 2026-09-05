@@ -87,8 +87,77 @@ enum _PillFill { primary, secondary, danger }
 /// The three-dot button that raises a game's pause sheet.
 ///
 /// It sits in the same corner of every game shell (`GameScaffold`, Mental Math,
-/// Quick Play, Tiny Arcade, Mafia), so it is one widget rather than five copies
+/// Quick Play, Tiny Arcade, Undercover), so it is one widget rather than five copies
 /// — the fifth of which had lost its semantics label.
+/// The shared undo control: 34px, in the game chrome's top-right immediately
+/// left of the overflow, at the same ghosted weight — so a player who learns it
+/// in Solitaire finds it in Sudoku without looking.
+///
+/// Three states, and no fourth: available (icon in the text colour, hairline
+/// ring), nothing to undo (the whole control dimmed, not tappable, **never
+/// hidden**), and pressed (a brief accent tint). It never carries a number — a
+/// count would make the cap read as a resource to spend, and disabled-when-empty
+/// says the same thing with nothing to read.
+///
+/// A game that does not support undo passes no callback and the control is not
+/// built at all: a missing control is quieter than a permanently dead one.
+class UndoButton extends StatefulWidget {
+  const UndoButton({super.key, required this.onTap, required this.enabled});
+
+  final VoidCallback onTap;
+
+  /// False when the stack is empty — and, on a two-seat board, while it is not
+  /// your turn: the last move belongs to the other seat.
+  final bool enabled;
+
+  @override
+  State<UndoButton> createState() => _UndoButtonState();
+}
+
+class _UndoButtonState extends State<UndoButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    final tint = _pressed && widget.enabled ? t.accent : t.textPrimary;
+    return Semantics(
+      button: true,
+      enabled: widget.enabled,
+      label: 'Undo',
+      child: Opacity(
+        opacity: widget.enabled ? 1 : 0.38,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: widget.enabled ? (_) => setState(() => _pressed = true) : null,
+          onTapCancel: widget.enabled ? () => setState(() => _pressed = false) : null,
+          onTap: widget.enabled
+              ? () {
+                  setState(() => _pressed = false);
+                  widget.onTap();
+                }
+              : null,
+          child: SizedBox(
+            width: 40,
+            height: 40,
+            child: Center(
+              child: Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: _pressed && widget.enabled ? t.accent : t.border),
+                ),
+                child: Icon(Icons.undo_rounded, size: 17, color: tint),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class OverflowButton extends StatelessWidget {
   const OverflowButton({super.key, required this.onTap, this.semanticLabel = 'More'});
 

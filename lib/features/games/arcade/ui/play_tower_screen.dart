@@ -132,7 +132,7 @@ class _PlayTowerScreenState extends ConsumerState<PlayTowerScreen>
         resumeFromUi();
         _startRun();
       },
-      stylePreviewBuilder: (context, id) => _StylePreview(style: towerStyleFromId(id)),
+      stylePreviewBuilder: (context, _, id) => _StylePreview(style: towerStyleFromId(id)),
       arena: (context, size) {
         _ensureCore(size);
         return GestureDetector(

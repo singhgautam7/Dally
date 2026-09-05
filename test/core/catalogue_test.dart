@@ -77,19 +77,27 @@ void main() {
       });
     });
 
-    test('the six Mental Math drills and five Arcade games are all registered', () {
+    test('the six Mental Math drills and six Arcade games are all registered', () {
       final math = registry.where((m) => m.category == GameCategory.mentalMath);
       expect(math.length, 6);
       final arcade = registry.where((m) => m.category == GameCategory.arcade);
-      // Exactly five — the handoff specifies "Arcade (5)". Snake is a Classic.
+      // Updraft joined the five the v2 handoff specified. Snake is a Classic.
       expect(arcade.map((m) => m.id).toSet(), {
-        'jumper', 'tower_builder', 'reaction', 'racer', 'avoider',
+        'jumper', 'tower_builder', 'reaction', 'racer', 'avoider', 'updraft',
       });
     });
 
-    test('Chess and Mafia are still registered and intact', () {
+    test('Chess and Undercover are still registered and intact', () {
       final ids = registry.map((m) => m.id).toSet();
-      expect(ids, containsAll(<String>['chess', 'mafia']));
+      expect(ids, containsAll(<String>['chess', 'undercover']));
+      // Undercover replaced Mafia outright — the old id is gone, and the stat
+      // reset that goes with that is documented in docs/undercover-migration.md.
+      expect(ids, isNot(contains('mafia')));
+    });
+
+    test('the v4 games are registered and reachable', () {
+      final ids = registry.map((m) => m.id).toSet();
+      expect(ids, containsAll(<String>['frog_hop', 'four_in_a_row', 'updraft']));
     });
   });
 
@@ -122,11 +130,11 @@ void main() {
     });
 
     test('a tag match is found, and reported as a weak match', () {
-      final hits = searchGames(registry, 'imposter');
+      final hits = searchGames(registry, 'bluff');
       expect(hits, isNotEmpty);
-      expect(hits.first.module.id, 'mafia');
+      expect(hits.first.module.id, 'undercover');
       expect(hits.first.isNameMatch, isFalse);
-      expect(hits.first.matchedOn, 'imposter');
+      expect(hits.first.matchedOn, 'bluff');
     });
 
     test('a category name finds everything in it', () {

@@ -17,14 +17,18 @@ class PlayerMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SizedBox.square(
         dimension: size,
-        child: CustomPaint(painter: _MarkPainter(identity, dim)),
+        child: CustomPaint(
+            painter: _MarkPainter(identity, dim, lightMode: !context.tokens.isDark)),
       );
 }
 
 class _MarkPainter extends CustomPainter {
-  const _MarkPainter(this.identity, this.dim);
+  const _MarkPainter(this.identity, this.dim, {required this.lightMode});
   final PlayerIdentity identity;
   final bool dim;
+
+  /// The identity hairline is mandatory in Light — see [identityOutline].
+  final bool lightMode;
 
   @override
   void paint(Canvas canvas, Size size) => paintPlayerToken(
@@ -33,11 +37,14 @@ class _MarkPainter extends CustomPainter {
         size.center(Offset.zero),
         size.shortestSide / 2,
         opacity: dim ? 0.35 : 1,
+        lightMode: lightMode,
       );
 
   @override
   bool shouldRepaint(_MarkPainter old) =>
-      old.identity.index != identity.index || old.dim != dim;
+      old.identity.index != identity.index ||
+      old.dim != dim ||
+      old.lightMode != lightMode;
 }
 
 /// The shared turn/score strip for seat-based games: every player's mark, name
@@ -112,6 +119,7 @@ class TokenStylePreview extends StatelessWidget {
             style: tokenStyleFromId(styleId),
             identities: identitiesFor(seats),
             knockout: context.tokens.surface,
+            lightMode: !context.tokens.isDark,
           ),
         ),
       );
@@ -122,11 +130,13 @@ class _TokenStylePainter extends CustomPainter {
     required this.style,
     required this.identities,
     required this.knockout,
+    required this.lightMode,
   });
 
   final PlayerTokenStyle style;
   final List<PlayerIdentity> identities;
   final Color knockout;
+  final bool lightMode;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -140,11 +150,12 @@ class _TokenStylePainter extends CustomPainter {
         radius,
         style: style,
         knockout: knockout,
+        lightMode: lightMode,
       );
     }
   }
 
   @override
   bool shouldRepaint(_TokenStylePainter old) =>
-      old.style != style || old.knockout != knockout;
+      old.style != style || old.knockout != knockout || old.lightMode != lightMode;
 }

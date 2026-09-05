@@ -1,17 +1,17 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/game/how_to_launcher.dart';
 import '../../../../core/game/player_identity.dart';
 import '../../../../core/game/session_recorder.dart';
+import '../../../../core/game/undo.dart';
 import '../../../../core/services/haptics.dart';
 import '../../../../core/storage/game_session.dart';
 import '../../../../core/theme/dally_tokens.dart';
 import '../../../../core/theme/motion.dart';
 import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/type_scale.dart';
+import '../../../../core/util/board_fit.dart';
 import '../../../../core/util/game_clock.dart';
 import '../../../../core/widgets/game_exit.dart';
 import '../../../../core/widgets/game_over_strip.dart';
@@ -23,8 +23,12 @@ import '../logic/dots_and_boxes.dart';
 import 'setup_dots_screen.dart' show lastLoserProvider;
 import 'dots_painter.dart';
 
-/// Dots & Boxes in play. Pass-and-play on one phone; the board never rotates
-/// and never animates — the strip under it carries every announcement.
+/// Dots & Boxes in play. Pass-and-play on one phone for two to four seats; the
+/// board never rotates and never animates — the strip under it carries every
+/// announcement.
+///
+/// The cell comes from the shared board fitter, so a 10 × 6 and a 6 × 10 are the
+/// same game at whatever size the screen allows, in either orientation.
 class PlayDotsScreen extends ConsumerStatefulWidget {
   const PlayDotsScreen({super.key, required this.moduleId, required this.config});
 
@@ -37,9 +41,9 @@ class PlayDotsScreen extends ConsumerStatefulWidget {
 
 class _PlayDotsScreenState extends ConsumerState<PlayDotsScreen>
     with WidgetsBindingObserver, GameClock, TickerProviderStateMixin, MotionRunner {
-  /// The two fixed seat identities. Coral and Cobalt — never a theme colour, so
-  /// "the red boxes are mine" survives a palette switch mid-game.
-  static final List<PlayerIdentity> _seats = identitiesFor(2);
+  /// The seats — chosen subsets from the shared palette, never a theme colour,
+  /// so "the red boxes are mine" survives a palette switch mid-game.
+  late final List<PlayerIdentity> _seats = identitiesFor(widget.config.playerCount);
 
   bool _reduceMotion = false;
 
@@ -50,6 +54,9 @@ class _PlayDotsScreenState extends ConsumerState<PlayDotsScreen>
   late DateTime _startedAt;
   String _strip = '';
   bool _recorded = false;
+
+  /// One step back is one line, plus any boxes it closed and the turn it took.
+  final _undo = UndoStack<DotsSnapshot>();
 
   /// Row-major indices of the boxes the *last* move closed. Only these settle;
   /// scaling every claimed mark would re-pop the whole board on every claim.
@@ -75,10 +82,16 @@ class _PlayDotsScreenState extends ConsumerState<PlayDotsScreen>
   }
 
   void _reset() {
-    _game = DotsAndBoxesGame(size: widget.config.size, firstPlayer: widget.config.firstPlayer);
+    _game = DotsAndBoxesGame(
+      cols: widget.config.cols,
+      rows: widget.config.rows,
+      playerCount: widget.config.playerCount,
+      firstPlayer: widget.config.firstPlayer,
+    );
     _startedAt = DateTime.now();
     _recorded = false;
     _justClaimed = const {};
+    _undo.reset();
     _strip = '${widget.config.nameOf(_game.currentPlayer)} starts';
     resetClock();
     startClock();
@@ -90,8 +103,10 @@ class _PlayDotsScreenState extends ConsumerState<PlayDotsScreen>
     if (edge == null || !_game.isLegal(edge)) return;
     final mover = _game.currentPlayer;
     final before = _ownedBoxes();
+    final snapshot = _game.snapshot();
     final result = _game.play(edge);
     if (result == null) return;
+    _undo.push(snapshot);
 
     Haptics.selection(ref);
     _justClaimed = _ownedBoxes().difference(before);
@@ -99,6 +114,8 @@ class _PlayDotsScreenState extends ConsumerState<PlayDotsScreen>
     setState(() {
       if (result.finished) {
         stopClock();
+        // A finished board cannot be un-finished.
+        _undo.clear();
         _record();
       } else if (result.claimed > 0) {
         final n = result.claimed == 1 ? 'One box' : 'Two boxes';
@@ -109,24 +126,41 @@ class _PlayDotsScreenState extends ConsumerState<PlayDotsScreen>
     });
   }
 
+  /// One line back, un-claiming anything it closed and handing the turn back.
+  void _undoMove() {
+    final snapshot = _undo.pop();
+    if (snapshot == null || _game.isFinished) return;
+    Haptics.selection(ref);
+    setState(() {
+      _game.restore(snapshot);
+      _justClaimed = const {};
+      _strip = '${widget.config.nameOf(_game.currentPlayer)}\'s turn';
+    });
+  }
+
   Set<int> _ownedBoxes() => {
-        for (var r = 0; r < _game.size; r++)
-          for (var c = 0; c < _game.size; c++)
-            if (_game.ownerAt(r, c) != -1) r * _game.size + c,
+        for (var r = 0; r < _game.rows; r++)
+          for (var c = 0; c < _game.cols; c++)
+            if (_game.ownerAt(r, c) != -1) r * _game.cols + c,
       };
 
   String _resultLine() {
-    final w = _game.winner;
-    if (w == null) return 'Drawn ${_game.scoreOf(0)}–${_game.scoreOf(1)}';
-    return '${widget.config.nameOf(w)} wins ${_game.scoreOf(w)}–${_game.scoreOf(1 - w)}';
+    final leaders = _game.leaders;
+    final top = _game.scoreOf(leaders.first);
+    if (leaders.length > 1) {
+      // A tie is declared as a tie, listing every seat on the top score.
+      return 'Tied on $top — ${[for (final p in leaders) widget.config.nameOf(p)].join(' & ')}';
+    }
+    return '${widget.config.nameOf(leaders.first)} wins with $top';
   }
 
   void _record() {
     if (_recorded) return;
     _recorded = true;
     final w = _game.winner;
-    // Feeds the setup screen's "Loser starts" default for the next game.
-    ref.read(lastLoserProvider.notifier).set(w == null ? null : 1 - w);
+    // Feeds the setup screen's "Loser starts" default for the next game: the
+    // seat on the *lowest* score opens.
+    ref.read(lastLoserProvider.notifier).set(_lowestSeat());
     recordSession(
       ref,
       gameId: widget.moduleId,
@@ -138,10 +172,23 @@ class _PlayDotsScreenState extends ConsumerState<PlayDotsScreen>
       configLabel: widget.config.configLabel,
       score: _game.scoreOf(0),
       extras: {
-        'boxesP1': _game.scoreOf(0),
-        'boxesP2': _game.scoreOf(1),
+        'players': widget.config.playerCount,
+        for (var p = 0; p < widget.config.playerCount; p++)
+          'boxesP${p + 1}': _game.scoreOf(p),
       },
+      usedUndo: _undo.used,
     );
+  }
+
+  int? _lowestSeat() {
+    var lowest = 0;
+    for (var p = 1; p < _game.playerCount; p++) {
+      if (_game.scoreOf(p) < _game.scoreOf(lowest)) lowest = p;
+    }
+    return _game.scoreOf(lowest) == _game.scoreOf(0) && _game.playerCount == 2 &&
+            _game.winner == null
+        ? null
+        : lowest;
   }
 
   Future<void> _openPause() async {
@@ -172,38 +219,57 @@ class _PlayDotsScreenState extends ConsumerState<PlayDotsScreen>
     final t = context.tokens;
     return GameScaffold(
       onOverflow: _openPause,
+      onUndo: _undoMove,
+      canUndo: _undo.canUndo && !_game.isFinished,
       ended: _game.isFinished,
       statusBar: PlayerStrip(
         identities: _seats,
-        names: [widget.config.playerOne, widget.config.playerTwo],
+        names: widget.config.names,
         activeIndex: _game.isFinished ? -1 : _game.currentPlayer,
         valueOf: (i) => '${_game.scoreOf(i)}',
       ),
       board: LayoutBuilder(
         builder: (context, constraints) {
-          // Cell = (min(width − 36, 340) − 12) / n, straight from the handoff.
+          // One shared fitter, first used here: divide the available box by the
+          // column and row counts, take the smaller scale, clamp, centre.
+          // Nothing in this file knows a pixel size.
           const outerMargin = 6.0;
-          final available = math.min(constraints.maxWidth - 36, 340.0);
-          final side = math.min(available, constraints.maxHeight - 12);
-          final cell = (side - outerMargin * 2) / widget.config.size;
-          final extent = cell * widget.config.size + outerMargin * 2;
+          final fit = fitBoard(
+            available: Size(constraints.maxWidth, constraints.maxHeight),
+            cols: widget.config.cols,
+            rows: widget.config.rows,
+            floor: 26,
+            cap: 64,
+            padding: outerMargin + 12,
+          );
           final painter = DotsPainter(
             game: _game,
-            cell: cell,
+            cell: fit.cell,
             margin: outerMargin,
             identities: _seats,
             ink: t.textPrimary,
             border: t.border,
             claimMarks: widget.config.claimMarks,
+            lightMode: !t.isDark,
             settling: _justClaimed,
             settle: motionPreset == MotionPreset.settle ? motionEased : 1,
           );
-          return GestureDetector(
+          final board = GestureDetector(
             onTapUp: (d) => _tap(d.localPosition, painter),
-            child: SizedBox.square(
-              dimension: extent,
+            child: SizedBox(
+              width: fit.width + outerMargin * 2,
+              height: fit.height + outerMargin * 2,
               child: CustomPaint(painter: painter),
             ),
+          );
+          // Below the fitter's floor the board scrolls rather than shrinking
+          // past a usable touch target — only the largest grids on the smallest
+          // phones reach it.
+          final available = Size(constraints.maxWidth, constraints.maxHeight);
+          if (!fit.overflows(available)) return Center(child: board);
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SingleChildScrollView(child: board),
           );
         },
       ),
@@ -212,10 +278,16 @@ class _PlayDotsScreenState extends ConsumerState<PlayDotsScreen>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Gap(Insets.s4),
-          if (!_game.isFinished)
+          if (!_game.isFinished) ...[
             Text(_strip,
                 textAlign: TextAlign.center,
                 style: DallyType.body.copyWith(fontSize: 14, color: t.textMuted)),
+            const Gap(Insets.s1),
+            Text('${_game.claimedBoxes} OF ${_game.totalBoxes} BOXES CLAIMED',
+                textAlign: TextAlign.center,
+                style: DallyType.label
+                    .copyWith(fontSize: 10, letterSpacing: 1.4, color: t.textFaint)),
+          ],
           if (_game.isFinished) ...[
             const Gap(Insets.s4),
             GameOverStrip(
@@ -232,4 +304,3 @@ class _PlayDotsScreenState extends ConsumerState<PlayDotsScreen>
     );
   }
 }
-

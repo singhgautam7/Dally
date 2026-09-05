@@ -1,3 +1,4 @@
+import 'package:dally/core/theme/accents.dart';
 import 'package:dally/core/theme/palettes.dart';
 import 'package:dally/features/games/chess/chess_config.dart';
 import 'package:dally/features/games/chess/ui/play_chess_screen.dart';
@@ -5,9 +6,15 @@ import 'package:dally/features/games/dots_and_boxes/dots_config.dart';
 import 'package:dally/features/games/dots_and_boxes/ui/play_dots_screen.dart';
 import 'package:dally/features/games/game_2048/game_2048_config.dart';
 import 'package:dally/features/games/game_2048/ui/play_2048_screen.dart';
-import 'package:dally/features/games/mafia/logic/mafia_word_pair.dart';
-import 'package:dally/features/games/mafia/mafia_config.dart';
-import 'package:dally/features/games/mafia/ui/play_mafia_screen.dart';
+import 'package:dally/features/games/four_in_a_row/four_config.dart';
+import 'package:dally/features/games/four_in_a_row/four_module.dart';
+import 'package:dally/features/games/four_in_a_row/ui/play_four_screen.dart';
+import 'package:dally/features/games/frog_hop/frog_hop_config.dart';
+import 'package:dally/features/games/frog_hop/frog_hop_module.dart';
+import 'package:dally/features/games/frog_hop/ui/play_frog_screen.dart';
+import 'package:dally/features/games/undercover/logic/word_pair.dart';
+import 'package:dally/features/games/undercover/ui/play_undercover_screen.dart';
+import 'package:dally/features/games/undercover/undercover_config.dart';
 import 'package:dally/features/games/memory/memory_config.dart';
 import 'package:dally/features/games/memory/ui/play_memory_screen.dart';
 import 'package:dally/features/games/snake/snake_config.dart';
@@ -38,14 +45,25 @@ void main() {
     'Dots & Boxes': () => const PlayDotsScreen(
           moduleId: 'dots_and_boxes',
           config: DotsConfig(
-              size: 4, playerOne: 'Ana', playerTwo: 'Ben', firstPlayer: 0),
+              cols: 6, rows: 4, names: ['Ana', 'Ben', 'Cass'], firstPlayer: 0),
         ),
-    'Mafia': () => const PlayMafiaScreen(
-          moduleId: 'mafia',
-          config: MafiaConfig(
-            names: ['Ana', 'Ben', 'Cass'],
-            difficulty: MafiaDifficulty.normal,
-            voting: MafiaVoting.open,
+    'Frog Hop': () => PlayFrogScreen(
+          module: FrogHopModule(),
+          config: const FrogHopConfig(perSide: 3, mode: FrogMode.race),
+        ),
+    'Four-in-a-Row': () => PlayFourScreen(
+          module: FourInARowModule(),
+          config: const FourConfig(
+              cols: 7, rows: 6, names: ['Mira', 'Tom'], firstPlayer: 0),
+        ),
+    'Undercover': () => const PlayUndercoverScreen(
+          moduleId: 'undercover',
+          config: UndercoverConfig(
+            names: ['Ana', 'Ben', 'Cass', 'Dee', 'Eli'],
+            undercover: 1,
+            mrWhite: true,
+            difficulty: WordDifficulty.normal,
+            voting: UndercoverVoting.open,
           ),
         ),
     'Sudoku': () => const PlaySudokuScreen(
@@ -103,6 +121,28 @@ void main() {
       }
     });
   }
+
+  group('a custom triple, which no preset names', () {
+    // Thirty combinations come out of the three axes; the contrast matrix
+    // measures all of them, and this checks one actually renders through the
+    // token layer end to end.
+    final custom = DallyPalettes.palette(
+        mode: DallyMode.dark, accentId: 'citron', amoled: true);
+
+    setUp(() => expect(custom.id, 'custom'));
+
+    for (final entry in screens.entries) {
+      testWidgets('${entry.key} lays out on Dark + Citron + AMOLED', (tester) async {
+        await pumpGameScreen(tester, entry.value(),
+            size: const Size(320, 568), palette: custom);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump(const Duration(milliseconds: 50));
+      });
+    }
+  });
 
   testWidgets('the pause sheet fits every palette on the smallest phone',
       (tester) async {

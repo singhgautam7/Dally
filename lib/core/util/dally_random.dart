@@ -82,6 +82,6 @@ class DallyRandom {
   }
 
   /// The plain [Random] behind this, for the handful of legacy game cores that
-  /// still take one directly (2048, minesweeper, memory, mafia).
+  /// still take one directly (2048, minesweeper, memory).
   Random get asRandom => _source;
 }

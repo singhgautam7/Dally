@@ -178,7 +178,7 @@ class SearchResults extends ConsumerWidget {
                     title: m.title,
                     glyphAsset: m.id,
                     vibe: m.vibeLabel,
-                    passAndPlay: m.players.contains(PlayerMode.passAndPlay),
+                    seats: m.players.contains(PlayerMode.passAndPlay) ? m.playerCount : null,
                     best: null,
                     onTap: () => onOpen(m),
                   ),

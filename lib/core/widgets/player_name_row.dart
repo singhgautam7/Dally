@@ -4,8 +4,8 @@ import '../theme/dally_tokens.dart';
 import '../theme/spacing.dart';
 import '../theme/type_scale.dart';
 
-/// One numbered name field with a remove control — the row Mafia's player list
-/// is built from, and the same row Bottle Spinner's setup uses under a
+/// One numbered name field with a remove control — the row Undercover's player
+/// list is built from, and the same row Bottle Spinner's setup uses under a
 /// different header.
 class PlayerNameRow extends StatelessWidget {
   const PlayerNameRow({

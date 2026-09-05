@@ -48,7 +48,7 @@ class QuickPlayScaffold extends ConsumerStatefulWidget {
 
   /// Supplied by games that have styles; omitted entirely by the ones that
   /// don't, so the picker row never appears disabled.
-  final Widget Function(BuildContext, String)? stylePreviewBuilder;
+  final StylePreviewBuilder? stylePreviewBuilder;
 
   final String? subtitle;
 

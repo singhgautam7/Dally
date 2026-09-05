@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/games/chess/chess_module.dart';
 import '../../features/games/dots_and_boxes/dots_and_boxes_module.dart';
 import '../../features/games/fifteen_puzzle/fifteen_puzzle_module.dart';
+import '../../features/games/four_in_a_row/four_module.dart';
+import '../../features/games/frog_hop/frog_hop_module.dart';
 import '../../features/games/game_2048/game_2048_module.dart';
 import '../../features/games/ludo/ludo_module.dart';
 import '../../features/games/memory/memory_module.dart';
-import '../../features/games/mafia/mafia_module.dart';
+import '../../features/games/undercover/undercover_module.dart';
 import '../../features/games/minesweeper/minesweeper_module.dart';
 import '../../features/games/snake/snake_module.dart';
 import '../../features/games/snakes_and_ladders/snakes_module.dart';
@@ -20,6 +22,7 @@ import '../../features/games/quick_play/dice/dice_module.dart';
 import '../../features/games/quick_play/random_choice/random_choice_module.dart';
 import '../../features/games/quick_play/random_number/random_number_module.dart';
 import '../../features/games/arcade/avoider_module.dart';
+import '../../features/games/arcade/updraft_module.dart';
 import '../../features/games/arcade/jumper_module.dart';
 import '../../features/games/arcade/racer_module.dart';
 import '../../features/games/arcade/reaction_module.dart';
@@ -46,9 +49,11 @@ final List<GameModule> kGameModules = <GameModule>[
   MemoryModule(),
   FifteenPuzzleModule(),
   TicTacToeModule(),
+  FourInARowModule(),
   ChessModule(),
-  MafiaModule(),
+  UndercoverModule(),
   DotsAndBoxesModule(),
+  FrogHopModule(),
   LudoModule(),
   SnakesAndLaddersModule(),
   SolitaireModule(),
@@ -74,6 +79,7 @@ final List<GameModule> kGameModules = <GameModule>[
 
   // Tiny Arcade — five one-input runs on the shared real-time loop.
   JumperModule(),
+  UpdraftModule(),
   TowerBuilderModule(),
   ReactionModule(),
   RacerModule(),

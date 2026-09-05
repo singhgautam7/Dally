@@ -1,8 +1,8 @@
 import 'package:dally/features/games/dots_and_boxes/dots_config.dart';
 import 'package:dally/features/games/dots_and_boxes/ui/play_dots_screen.dart';
-import 'package:dally/features/games/mafia/logic/mafia_word_pair.dart';
-import 'package:dally/features/games/mafia/mafia_config.dart';
-import 'package:dally/features/games/mafia/ui/play_mafia_screen.dart';
+import 'package:dally/features/games/undercover/logic/word_pair.dart';
+import 'package:dally/features/games/undercover/ui/play_undercover_screen.dart';
+import 'package:dally/features/games/undercover/undercover_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -12,7 +12,7 @@ import '../support/game_harness.dart';
 /// ways each of them used to get leaving wrong.
 ///
 /// Dots & Boxes popped one screen — landing back on its *own setup screen*
-/// rather than Home. Mafia's `PopScope` opened the pause sheet on every back
+/// rather than Home. The party game's `PopScope` opened the pause sheet on every back
 /// press and offered no second step, so system back could never leave the game
 /// at all.
 void main() {
@@ -23,9 +23,9 @@ void main() {
 
   group('Dots & Boxes', () {
     const config = DotsConfig(
-      size: 4,
-      playerOne: 'Ana',
-      playerTwo: 'Ben',
+      cols: 4,
+      rows: 4,
+      names: ['Ana', 'Ben'],
       firstPlayer: 0,
     );
 
@@ -68,14 +68,17 @@ void main() {
     });
   });
 
-  group('Mafia', () {
-    const config = MafiaConfig(
-      names: ['Ana', 'Ben', 'Cass'],
-      difficulty: MafiaDifficulty.normal,
-      voting: MafiaVoting.open,
+  group('Undercover', () {
+    const config = UndercoverConfig(
+      names: ['Ana', 'Ben', 'Cass', 'Dee', 'Eli'],
+      undercover: 1,
+      mrWhite: false,
+      difficulty: WordDifficulty.normal,
+      voting: UndercoverVoting.open,
     );
 
-    Widget screen() => const PlayMafiaScreen(moduleId: 'mafia', config: config);
+    Widget screen() =>
+        const PlayUndercoverScreen(moduleId: 'undercover', config: config);
 
     testWidgets('back opens the pause sheet, and back again offers to leave',
         (tester) async {

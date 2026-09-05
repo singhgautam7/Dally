@@ -160,7 +160,7 @@ class _PlayDiceScreenState extends ConsumerState<PlayDiceScreen>
         _recentTotals = const [];
         _rolled = false;
       }),
-      stylePreviewBuilder: (context, id) => Row(
+      stylePreviewBuilder: (context, _, id) => Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           DieChip(value: 5, style: diceStyleFromId(id), size: 40),

@@ -1,6 +1,7 @@
 import 'package:dally/core/app_providers.dart';
 import 'package:dally/core/storage/key_value_store.dart';
 import 'package:dally/core/theme/dally_tokens.dart';
+import 'package:dally/core/theme/palette.dart';
 import 'package:dally/core/theme/palettes.dart';
 import 'package:dally/core/theme/type_scale.dart';
 import 'package:dally/core/util/dally_random.dart';
@@ -22,6 +23,9 @@ Future<void> pumpGameScreen(
   int seed = 1,
   Size size = const Size(360, 640),
   String paletteId = 'ink',
+  /// A palette built from a triple, for the custom themes a preset id cannot
+  /// name. Wins over [paletteId] when both are given.
+  Palette? palette,
   Map<String, Object> prefs = const {},
 }) async {
   SharedPreferences.setMockInitialValues(prefs);
@@ -31,7 +35,7 @@ Future<void> pumpGameScreen(
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
 
-  final palette = DallyPalettes.byId(paletteId);
+  final resolved = palette ?? DallyPalettes.byId(paletteId);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -42,8 +46,8 @@ Future<void> pumpGameScreen(
         theme: ThemeData(
           useMaterial3: true,
           fontFamily: DallyType.display,
-          scaffoldBackgroundColor: palette.bg,
-          extensions: [DallyTokens.of(palette)],
+          scaffoldBackgroundColor: resolved.bg,
+          extensions: [DallyTokens.of(resolved)],
         ),
         home: screen,
       ),

@@ -24,6 +24,36 @@ class StyleOption {
   final bool recommended;
 }
 
+/// One labelled row of styles in the picker, with its own persistence key.
+///
+/// Most games have exactly one row and never build a group by hand — the
+/// default [GameModule.styleGroups] wraps [GameModule.styleOptions] in one.
+/// A game with more than one thing worth styling (Jumper's character *and* its
+/// platforms) declares them here, and each row is remembered separately.
+@immutable
+class StyleGroup {
+  const StyleGroup({required this.id, required this.label, required this.options});
+
+  /// Empty for a game's primary row, which keeps the bare `gameId` key so no
+  /// existing player's choice is orphaned. Any other row is stored under
+  /// `gameId.groupId`.
+  final String id;
+
+  /// What the row is called: "Character", "Platforms", "Piece".
+  final String label;
+
+  final List<StyleOption> options;
+
+  /// The recommended option where there is one, else the first.
+  String? get defaultId {
+    if (options.isEmpty) return null;
+    for (final o in options) {
+      if (o.recommended) return o.id;
+    }
+    return options.first.id;
+  }
+}
+
 /// Opaque, per-game configuration produced by the setup screen and handed to
 /// the play screen. Each game defines its own subclass.
 @immutable
@@ -97,6 +127,12 @@ abstract class GameModule {
 
   /// What the picker calls the thing being styled: "Piece", "Coin", "Dice".
   String get styleNoun => 'Style';
+
+  /// The picker's rows. One row is the common case and comes for free from
+  /// [styleOptions]; override only to offer more than one.
+  List<StyleGroup> get styleGroups => styleOptions.isEmpty
+      ? const []
+      : [StyleGroup(id: '', label: styleNoun, options: styleOptions)];
 
   // ── Statistics (declared by the game, rendered by the shell) ───────────────
 

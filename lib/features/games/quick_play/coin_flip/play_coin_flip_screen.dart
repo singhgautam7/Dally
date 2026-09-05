@@ -165,7 +165,7 @@ class _PlayCoinFlipScreenState extends ConsumerState<PlayCoinFlipScreen>
         _batch = const [];
         _flipped = false;
       }),
-      stylePreviewBuilder: (context, id) => Row(
+      stylePreviewBuilder: (context, _, id) => Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           CoinChip(face: CoinFace.heads, style: coinStyleFromId(id), size: 34),

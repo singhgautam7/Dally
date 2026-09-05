@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/storage/game_session.dart';
 import '../../../../core/game/session_recorder.dart';
+import '../../../../core/game/undo.dart';
 import '../../../../core/game/how_to_launcher.dart';
 import '../../../../core/app_providers.dart';
 import '../../../../core/services/haptics.dart';
@@ -38,9 +39,9 @@ class _Play2048ScreenState extends ConsumerState<Play2048Screen> {
   DateTime _startedAt = DateTime.now();
   bool _sessionRecorded = false;
 
-  // One-level undo.
-  List<int>? _undoValues;
-  int _undoScore = 0;
+  /// The shared bounded stack (five steps, one behaviour everywhere). One
+  /// swipe is one snapshot: tiles and score restored together.
+  final _undo = UndoStack<({List<int> values, int score})>();
 
   int get _size => widget.config.size;
 
@@ -74,8 +75,7 @@ class _Play2048ScreenState extends ConsumerState<Play2048Screen> {
     final res = _board.apply(dir);
     if (!res.moved) return;
 
-    _undoValues = prevValues;
-    _undoScore = prevScore;
+    _undo.push((values: prevValues, score: prevScore));
 
     Haptics.light(ref);
     setState(() => _ghosts = res.mergedAway);
@@ -92,19 +92,24 @@ class _Play2048ScreenState extends ConsumerState<Play2048Screen> {
     _recordBests();
     // A board with no legal move left is a finished session; a win the player
     // keeps playing through is not, so it is recorded once, at the true end.
-    if (_gameOver) _recordSessionOnce();
+    // A finished board cannot be un-finished.
+    if (_gameOver) {
+      _undo.clear();
+      _recordSessionOnce();
+    }
 
     if (_won && !_wonDismissed) {
       Haptics.medium(ref);
     }
   }
 
-  void _undo() {
-    if (_undoValues == null) return;
+  void _undoMove() {
+    final snapshot = _undo.pop();
+    if (snapshot == null) return;
+    Haptics.light(ref);
     setState(() {
-      _board.loadValues(_undoValues!, _undoScore);
+      _board.loadValues(snapshot.values, snapshot.score);
       _ghosts = const [];
-      _undoValues = null;
     });
     _persist();
   }
@@ -114,7 +119,7 @@ class _Play2048ScreenState extends ConsumerState<Play2048Screen> {
       _board = Board2048(size: _size, rng: ref.read(randomProvider).asRandom)..start();
       _ghosts = const [];
       _wonDismissed = false;
-      _undoValues = null;
+      _undo.reset();
     });
     _startedAt = DateTime.now();
     _sessionRecorded = false;
@@ -134,10 +139,15 @@ class _Play2048ScreenState extends ConsumerState<Play2048Screen> {
       configLabel: '$_size×$_size',
       score: _board.score,
       extras: {'bestTile': _board.maxTile},
+      usedUndo: _undo.used,
     );
   }
 
   void _recordBests() {
+    // A run that used undo does not set a record — see the record-integrity
+    // policy in `.agents/CLAUDE.md` §7.3. It still saves, still plays, still
+    // counts as a game.
+    if (_undo.used) return;
     final stats = ref.read(statsRepositoryProvider);
     stats.recordBest('${widget.moduleId}.bestScore.$_size', _board.score.toDouble(),
         higherIsBetter: true);
@@ -198,6 +208,8 @@ class _Play2048ScreenState extends ConsumerState<Play2048Screen> {
     final t = context.tokens;
     return GameScaffold(
       onOverflow: _openPause,
+      onUndo: _undoMove,
+      canUndo: _undo.canUndo && !_showWin && !_gameOver,
       ended: _showWin || _gameOver,
       progressSaved: true,
       statusBar: _ScoreRow(score: _board.score, best: _best.toInt()),
@@ -230,7 +242,7 @@ class _Play2048ScreenState extends ConsumerState<Play2048Screen> {
                     primaryLabel: 'New game',
                     onPrimary: _restart,
                   )
-                : _Controls(canUndo: _undoValues != null, onUndo: _undo, onRestart: _restart, tokens: t),
+                : _Controls(onRestart: _restart, tokens: t),
       ),
     );
   }
@@ -462,16 +474,11 @@ class _TileBoxState extends State<_TileBox>
 
 // ── Controls & overlays ────────────────────────────────────────────────────
 
+/// Undo moved to the shared control in the chrome's top-right, so restart is
+/// all that is left down here.
 class _Controls extends StatelessWidget {
-  const _Controls({
-    required this.canUndo,
-    required this.onUndo,
-    required this.onRestart,
-    required this.tokens,
-  });
+  const _Controls({required this.onRestart, required this.tokens});
 
-  final bool canUndo;
-  final VoidCallback onUndo;
   final VoidCallback onRestart;
   final DallyTokens tokens;
 
@@ -484,8 +491,6 @@ class _Controls extends StatelessWidget {
         Text('Swipe to move', style: DallyType.body.copyWith(fontSize: 12, color: t.textFaint)),
         Row(
           children: [
-            _circleBtn(t, Icons.undo_rounded, 'Undo', canUndo ? onUndo : null),
-            const Gap.h(Insets.s2 + 2),
             _circleBtn(t, Icons.refresh_rounded, 'Restart', onRestart),
           ],
         ),

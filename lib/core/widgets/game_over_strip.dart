@@ -35,7 +35,7 @@ class GameOverStrip extends StatelessWidget {
   final String primaryLabel;
   final VoidCallback onPrimary;
 
-  /// Omit for a single full-width pill (2048's dead end, Mafia's summary).
+  /// Omit for a single full-width pill (2048's dead end, Undercover's summary).
   final String? secondaryLabel;
   final VoidCallback? onSecondary;
 

@@ -12,7 +12,8 @@ import 'dots_config.dart';
 import 'ui/play_dots_screen.dart';
 import 'ui/setup_dots_screen.dart';
 
-/// Dots & Boxes — pass-and-play on one phone, 4×4 to 6×6.
+/// Dots & Boxes — pass-and-play on one phone, any board from 3×3 to 12×12 in
+/// either orientation, for two to four seats.
 class DotsAndBoxesModule extends GameModule {
   @override
   String get id => 'dots_and_boxes';
@@ -22,6 +23,9 @@ class DotsAndBoxesModule extends GameModule {
 
   @override
   String get tagline => 'Close a box, take another turn.';
+
+  @override
+  PlayerCount get playerCount => PlayerCount.group;
 
   @override
   Widget buildGlyph(BuildContext context) => GameGlyph(asset: id);
@@ -39,7 +43,8 @@ class DotsAndBoxesModule extends GameModule {
   GameLength get typicalLength => GameLength.medium;
 
   @override
-  List<String> get tags => const ['boxes', 'lines', 'grid', 'two player', 'paper', 'squares'];
+  List<String> get tags =>
+      const ['boxes', 'lines', 'grid', 'two player', 'four player', 'paper', 'squares'];
 
   @override
   bool get supportsSaveResume => false;
@@ -52,24 +57,22 @@ class DotsAndBoxesModule extends GameModule {
     return [
       if (w + l + d > 0)
         StatBlock.bars(title: 'Series', bars: [
-          StatBar('Player 1', w, accent: true),
-          StatBar('Player 2', l),
-          StatBar('Drawn', d),
+          StatBar('Seat 1', w, accent: true),
+          StatBar('Others', l),
+          StatBar('Tied', d),
         ]),
       StatBlock.cells(cells: [
         StatCell.count('Games', agg.sessions),
         StatCell.average('Average game', agg.metric('duration'), StatFormat.duration),
-        StatCell.metric('Most boxes', agg.metric('boxesP1'), StatFormat.number,
-            higherIsBetter: true),
+        StatCell.average('Players', agg.metric('players'), StatFormat.number),
         StatCell('Play time', StatFormat.duration.render(agg.seconds), earned: agg.seconds > 0),
       ]),
-      for (final label in const ['4×4', '5×5', '6×6'])
-        if (!agg.config(label).isEmpty)
-          StatBlock.cells(title: label, cells: [
-            StatCell.count('Games', agg.config(label).sessions),
-            StatCell.average('Average game', agg.config(label).metric('duration'),
-                StatFormat.duration),
-          ]),
+      StatBlock.cells(title: 'Boxes claimed', cells: [
+        for (var p = 1; p <= 4; p++)
+          if (!agg.metric('boxesP$p').isEmpty)
+            StatCell.metric('Seat $p', agg.metric('boxesP$p'), StatFormat.number,
+                higherIsBetter: true),
+      ]),
     ];
   }
 

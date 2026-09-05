@@ -271,7 +271,7 @@ class _PlayLudoScreenState extends ConsumerState<PlayLudoScreen>
           context,
           ref,
           module: _module,
-          previewBuilder: (context, id) =>
+          previewBuilder: (context, _, id) =>
               TokenStylePreview(styleId: id, seats: widget.config.playerCount),
         ),
         const LudoDicePositionRow(),
@@ -414,6 +414,7 @@ class _PlayLudoScreenState extends ConsumerState<PlayLudoScreen>
                   onTapUp: (d) => _tapBoard(d.localPosition, side),
                   child: CustomPaint(
                     painter: LudoPainter(
+                      lightMode: !t.isDark,
                       game: _game,
                       identities: _seats,
                       border: t.border,

@@ -124,7 +124,7 @@ class _PlaySpinnerScreenState extends ConsumerState<PlaySpinnerScreen>
         _winner = -1;
         _spins = 0;
       }),
-      stylePreviewBuilder: (context, id) =>
+      stylePreviewBuilder: (context, _, id) =>
           SpinnerChip(style: spinnerStyleFromId(id)),
       result: LayoutBuilder(
         builder: (context, constraints) {

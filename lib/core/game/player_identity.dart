@@ -48,6 +48,19 @@ const List<PlayerIdentity> kPlayerIdentities = [
       index: 3, color: Color(0xFFD9A21B), shape: PlayerShape.square, name: 'Amber'),
 ];
 
+/// The identity's own colour, one step darker — the **mandatory** hairline
+/// whenever the mode is Light.
+///
+/// Measured against the Light background the four fixed fills read 3.08, 2.03,
+/// 3.34 and 2.49; two of the four are under the 3:1 a graphical object needs to
+/// carry meaning on its own. The hairline is what carries the edge, lifting all
+/// four to 3.26 and above. The fills themselves do not move — they are shared
+/// with saved games and screenshots — so the edge is the thing that changes.
+///
+/// Added in phase 7 as a light-theme refinement; required since phase 21.
+Color identityOutline(PlayerIdentity id) =>
+    Color.lerp(id.color, const Color(0xFF000000), 0.34)!;
+
 /// The seats for a [count]-player game, 2–4.
 ///
 /// The subsets are chosen, not truncated: two players get the pair that stays
@@ -197,10 +210,23 @@ void paintPlayerToken(
   double opacity = 1,
   PlayerTokenStyle style = PlayerTokenStyle.geometric,
   Color? knockout,
+  bool lightMode = false,
 }) {
   final fill = Paint()
     ..color = opacity == 1 ? id.color : id.color.withValues(alpha: opacity)
     ..isAntiAlias = true;
+
+  // In Light the hairline is not a refinement — two of the four fills sit
+  // under 3:1 against the light background without it (see [identityOutline]).
+  final edge = lightMode
+      ? (Paint()
+        ..color = opacity == 1
+            ? identityOutline(id)
+            : identityOutline(id).withValues(alpha: opacity)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = math.max(1, radius * 0.12)
+        ..isAntiAlias = true)
+      : null;
 
   if (style == PlayerTokenStyle.pin) {
     // A map pin, anchored the way a map pin is: the **point sits on the cell
@@ -211,6 +237,7 @@ void paintPlayerToken(
     final tip = centre;
     final head = pinHeadCentre(tip, radius);
     canvas.drawPath(pinPath(tip, headRadius), fill);
+    if (edge != null) canvas.drawPath(pinPath(tip, headRadius), edge);
     if (knockout != null) {
       canvas.drawPath(
         playerShapePath(id.shape, head, headRadius * 0.403),
@@ -221,6 +248,7 @@ void paintPlayerToken(
     }
   } else if (style == PlayerTokenStyle.pawn) {
     canvas.drawPath(pawnPath(centre, radius), fill);
+    if (edge != null) canvas.drawPath(pawnPath(centre, radius), edge);
     if (knockout != null) {
       // The glyph sits in the base bar, at the size the 12px Ludo cell allows.
       final base = Offset(centre.dx, centre.dy + radius * 0.66);
@@ -233,6 +261,9 @@ void paintPlayerToken(
     }
   } else {
     canvas.drawPath(playerShapePath(id.shape, centre, radius), fill);
+    if (edge != null) {
+      canvas.drawPath(playerShapePath(id.shape, centre, radius), edge);
+    }
   }
 
   if (ring != null) {

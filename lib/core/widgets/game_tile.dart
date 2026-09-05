@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../game/game_category.dart';
 import '../theme/dally_tokens.dart';
 import '../theme/spacing.dart';
 import '../theme/type_scale.dart';
@@ -13,7 +14,7 @@ class GameTile extends StatelessWidget {
     required this.title,
     required this.glyphAsset,
     required this.vibe,
-    required this.passAndPlay,
+    required this.seats,
     required this.onTap,
     this.best,
   });
@@ -21,7 +22,9 @@ class GameTile extends StatelessWidget {
   final String title;
   final String glyphAsset;
   final String vibe;
-  final bool passAndPlay;
+  /// How many bodies the game needs, from the module's own metadata. Null for
+  /// a solo game, which carries no badge at all.
+  final PlayerCount? seats;
   final String? best;
   final VoidCallback onTap;
 
@@ -50,7 +53,7 @@ class GameTile extends StatelessWidget {
                   children: [
                     GameGlyph(asset: glyphAsset, size: 30),
                     const Spacer(),
-                    if (passAndPlay) _PassBadge(tokens: t),
+                    if (seats != null) _SeatsBadge(seats: seats!, tokens: t),
                   ],
                 ),
                 const Spacer(),
@@ -90,8 +93,13 @@ class GameTile extends StatelessWidget {
   }
 }
 
-class _PassBadge extends StatelessWidget {
-  const _PassBadge({required this.tokens});
+/// The pass-and-play badge. It reads the module's declared [PlayerCount]
+/// rather than a literal: "2P" was hardcoded, which was already a half-truth
+/// for the 2–4 seat board games and became a flat lie when Dots & Boxes gained
+/// four seats and Undercover took 4–20.
+class _SeatsBadge extends StatelessWidget {
+  const _SeatsBadge({required this.seats, required this.tokens});
+  final PlayerCount seats;
   final DallyTokens tokens;
 
   @override
@@ -103,7 +111,11 @@ class _PassBadge extends StatelessWidget {
         borderRadius: Radii.pillBR,
       ),
       child: Text(
-        '2P',
+        switch (seats) {
+          PlayerCount.group => '4+',
+          PlayerCount.two => '2P',
+          PlayerCount.solo => '1P',
+        },
         style: DallyType.monoSm.copyWith(
           fontSize: 9,
           letterSpacing: 0.9,

@@ -26,6 +26,8 @@ class GameScaffold extends ConsumerStatefulWidget {
     required this.board,
     required this.onOverflow,
     this.controls,
+    this.onUndo,
+    this.canUndo = false,
     this.ended = false,
     this.progressSaved = false,
     this.fillControls = false,
@@ -48,6 +50,14 @@ class GameScaffold extends ConsumerStatefulWidget {
 
   /// Opens the pause sheet.
   final VoidCallback onOverflow;
+
+  /// Takes one move back. Null in every game where undo does not apply, and the
+  /// control is then not built at all (`.agents/CLAUDE.md` §7.1).
+  final VoidCallback? onUndo;
+
+  /// Whether there is anything to take back right now. False leaves the control
+  /// visible and dimmed rather than removing it.
+  final bool canUndo;
 
   /// True once the game has an end state on screen. Back then goes straight
   /// home: there is nothing left to confirm losing.
@@ -90,10 +100,14 @@ class _GameScaffoldState extends ConsumerState<GameScaffold> {
       padding: const EdgeInsets.fromLTRB(Insets.s4 + 2, Insets.s5, Insets.s4 + 2, Insets.s4),
       child: Column(
         children: [
-          // Top bar — overflow only.
-          Align(
-            alignment: Alignment.centerRight,
-            child: OverflowButton(onTap: _openPause, semanticLabel: 'Pause'),
+          // Top bar — undo (where the game has one) then overflow.
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (widget.onUndo != null)
+                UndoButton(onTap: widget.onUndo!, enabled: widget.canUndo),
+              OverflowButton(onTap: _openPause, semanticLabel: 'Pause'),
+            ],
           ),
           const Gap(Insets.s1 + 2),
           widget.statusBar,

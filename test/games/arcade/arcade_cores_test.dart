@@ -37,15 +37,16 @@ void main() {
       );
       final ys = core.platforms.map((p) => p.y).toList()..sort();
       for (var i = 1; i < ys.length; i++) {
-        expect(ys[i] - ys[i - 1], closeTo(JumperCore.bandGap, 0.001));
+        expect(ys[i] - ys[i - 1], closeTo(core.bandGap, 0.001));
       }
     });
 
     test('the apex of a bounce clears one band', () {
-      // Peak rise = v² / 2g, which must exceed the fixed band gap.
-      final apex = (JumperCore.jumpImpulse * JumperCore.jumpImpulse) /
-          (2 * JumperCore.gravity);
-      expect(apex, greaterThan(JumperCore.bandGap));
+      // Peak rise = v² / 2g, which must exceed the fixed band gap. Both scale
+      // with the arena, so the ratio holds at every size.
+      final core = JumperCore(
+          rng: DallyRandom.seeded(3), arenaWidth: 320, arenaHeight: 560);
+      expect(core.jumpApex, greaterThan(core.bandGap));
     });
 
     test('advancing is frame-rate independent', () {

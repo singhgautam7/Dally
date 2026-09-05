@@ -141,7 +141,7 @@ class _ThemeStep extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = context.tokens;
-    final selectedId = ref.watch(settingsControllerProvider.select((s) => s.paletteId));
+    final current = ref.watch(themeTripleProvider).preset?.id;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -162,10 +162,14 @@ class _ThemeStep extends ConsumerWidget {
             ),
             itemCount: DallyPalettes.standard.length,
             itemBuilder: (context, i) {
-              final p = DallyPalettes.standard[i];
+              final preset = DallyPalettes.standard[i];
               return GestureDetector(
-                onTap: () => ref.read(settingsControllerProvider.notifier).selectPalette(p.id),
-                child: GenericPalettePreview(palette: p, selected: p.id == selectedId),
+                onTap: () =>
+                    ref.read(settingsControllerProvider.notifier).selectPreset(preset),
+                child: GenericPalettePreview(
+                  palette: DallyPalettes.ofPreset(preset),
+                  selected: preset.id == current,
+                ),
               );
             },
           ),

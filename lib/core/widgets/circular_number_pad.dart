@@ -5,7 +5,11 @@ import '../theme/spacing.dart';
 import '../theme/type_scale.dart';
 
 /// The Sudoku input pad: 1–9 circles carrying a remaining-count subscript, an
-/// erase key, a pencil (Notes) toggle and undo. Matches Foundations component 5.
+/// erase key and a pencil (Notes) toggle. Matches Foundations component 5.
+///
+/// Undo is **not** here: it is one control in one place, in the game chrome's
+/// top-right, so a player who learns it in Solitaire finds it in Sudoku without
+/// looking (`.agents/CLAUDE.md` §7.1).
 class CircularNumberPad extends StatelessWidget {
   const CircularNumberPad({
     super.key,
@@ -14,8 +18,6 @@ class CircularNumberPad extends StatelessWidget {
     required this.onErase,
     required this.pencilOn,
     required this.onTogglePencil,
-    required this.onUndo,
-    required this.canUndo,
   });
 
   /// remaining[d] = how many of digit d (1..9) are still to be placed.
@@ -24,8 +26,6 @@ class CircularNumberPad extends StatelessWidget {
   final VoidCallback onErase;
   final bool pencilOn;
   final VoidCallback onTogglePencil;
-  final VoidCallback onUndo;
-  final bool canUndo;
 
   @override
   Widget build(BuildContext context) {
@@ -43,13 +43,7 @@ class CircularNumberPad extends StatelessWidget {
           children: [for (var d = 6; d <= 9; d++) _digit(t, d), _erase(t)],
         ),
         const Gap(Insets.s3 + 2),
-        Row(
-          children: [
-            Expanded(child: _notes(t)),
-            const Gap.h(Insets.s2 + 2),
-            _undo(t),
-          ],
-        ),
+        _notes(t),
       ],
     );
   }
@@ -134,20 +128,4 @@ class CircularNumberPad extends StatelessWidget {
         ),
       );
 
-  Widget _undo(DallyTokens t) => Opacity(
-        opacity: canUndo ? 1 : 0.4,
-        child: Semantics(
-          button: true,
-          label: 'Undo',
-          child: GestureDetector(
-            onTap: canUndo ? onUndo : null,
-            child: Container(
-              width: 56,
-              height: 50,
-              decoration: BoxDecoration(borderRadius: Radii.pillBR, border: Border.all(color: t.border)),
-              child: Icon(Icons.undo_rounded, size: 18, color: t.textMuted),
-            ),
-          ),
-        ),
-      );
 }

@@ -5,6 +5,7 @@ import '../../../../core/app_providers.dart';
 import '../../../../core/game/game_module.dart';
 import '../../../../core/game/how_to_launcher.dart';
 import '../../../../core/game/session_recorder.dart';
+import '../../../../core/game/undo.dart';
 import '../../../../core/services/haptics.dart';
 import '../../../../core/storage/game_session.dart';
 import '../../../../core/theme/dally_tokens.dart';
@@ -63,6 +64,11 @@ class _PlaySolitaireScreenState extends ConsumerState<PlaySolitaireScreen>
   /// 1 once the deal has finished playing out.
   double _dealProgress = 1;
 
+  /// The shared bounded stack. One step is one move — a card back to where it
+  /// came from, **flip included**, which is why it restores a snapshot rather
+  /// than inverting the move.
+  final _undo = UndoStack<SolitaireSnapshot>();
+
   @override
   bool get motionReduced => _reduceMotion;
   bool _reduceMotion = false;
@@ -95,6 +101,7 @@ class _PlaySolitaireScreenState extends ConsumerState<PlaySolitaireScreen>
     _flight = null;
     _rejected = null;
     _drag = null;
+    _undo.reset();
     resetClock();
     startClock();
     _playDeal();
@@ -129,7 +136,9 @@ class _PlaySolitaireScreenState extends ConsumerState<PlaySolitaireScreen>
     if (_busy || _game.isWon || _boardSize.isEmpty) return;
     final hit = _layout.hitTest(point);
     if (hit == null || hit.kind != PileKind.stock) return;
+    final before = _game.snapshot();
     if (_game.draw()) {
+      _undo.push(before);
       Haptics.selection(ref);
       setState(() {});
     }
@@ -172,7 +181,9 @@ class _PlaySolitaireScreenState extends ConsumerState<PlaySolitaireScreen>
       CardRef from, PileKind toKind, int toPile, SolitaireLayout before) async {
     final cards = _game.movingCards(from);
     final origin = before.rectFor(from).topLeft;
+    final undoPoint = _game.snapshot();
     if (!_game.move(from, toKind, toPile)) return;
+    _undo.push(undoPoint);
     Haptics.selection(ref);
 
     final after = _layout;
@@ -232,9 +243,63 @@ class _PlaySolitaireScreenState extends ConsumerState<PlaySolitaireScreen>
     _checkWin();
   }
 
+  /// One step back, with the reverse of the move it undoes: the run travels
+  /// from where it landed to where it came from, at the same duration, so the
+  /// board never jumps. Under reduce motion the destination lands immediately.
+  Future<void> _undoMove() async {
+    if (_busy || _game.isWon) return;
+    final before = _undo.pop();
+    if (before == null) return;
+    // Where the cards the last move sent away are *now*, read off the board
+    // before it is restored — the flight's origin.
+    final moved = _movedRun(before);
+    Haptics.selection(ref);
+    _game.restore(before);
+    if (moved != null && !motionReduced) {
+      _busy = true;
+      setState(() => _flight = (moved.cards, moved.from, _layout.rectFor(moved.to).topLeft));
+      await play(MotionPreset.move);
+      if (!mounted) return;
+      _busy = false;
+    }
+    if (!mounted) return;
+    setState(() => _flight = null);
+  }
+
+  /// The run the last move sent somewhere, expressed as "these cards, from here
+  /// on the current board, back to there on the restored one". Null when the
+  /// step was a stock draw, which has no travel to reverse.
+  ({List<PlayingCard> cards, Offset from, CardRef to})? _movedRun(
+      SolitaireSnapshot before) {
+    for (var c = 0; c < Solitaire.columns; c++) {
+      final now = _game.tableau[c], was = before.tableau[c];
+      if (now.length > was.length) {
+        final cards = now.sublist(was.length);
+        return (
+          cards: cards,
+          from: _layout.tableauRect(c, was.length).topLeft,
+          to: CardRef(PileKind.tableau, c, was.length),
+        );
+      }
+    }
+    for (var f = 0; f < _game.foundations.length; f++) {
+      final now = _game.foundations[f], was = before.foundations[f];
+      if (now.length > was.length) {
+        return (
+          cards: [now.last],
+          from: _layout.foundationRect(f).topLeft,
+          to: CardRef(PileKind.foundation, f, was.length),
+        );
+      }
+    }
+    return null;
+  }
+
   void _checkWin() {
     if (!_game.isWon || _recorded) return;
     stopClock();
+    // A finished board cannot be un-finished.
+    _undo.clear();
     _recorded = true;
     recordSession(
       ref,
@@ -244,6 +309,7 @@ class _PlaySolitaireScreenState extends ConsumerState<PlaySolitaireScreen>
       outcome: SessionOutcome.won,
       configLabel: widget.config.configLabel,
       extras: {'moves': _game.moves},
+      usedUndo: _undo.used,
     );
     setState(() {});
   }
@@ -266,7 +332,7 @@ class _PlaySolitaireScreenState extends ConsumerState<PlaySolitaireScreen>
             Navigator.of(context).pop();
             showStylePicker(context, ref,
                 module: widget.module,
-                previewBuilder: (context, styleId) =>
+                previewBuilder: (context, _, styleId) =>
                     _CardPreview(styleId: styleId));
           },
         ),
@@ -293,6 +359,8 @@ class _PlaySolitaireScreenState extends ConsumerState<PlaySolitaireScreen>
     final held = _drag;
     return GameScaffold(
       onOverflow: _openPause,
+      onUndo: _undoMove,
+      canUndo: _undo.canUndo && !_game.isWon && !_busy,
       ended: _game.isWon,
       progressSaved: false,
       // Scaled down rather than wrapped: three chips is one line on every phone.

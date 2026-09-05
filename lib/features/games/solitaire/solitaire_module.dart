@@ -56,7 +56,9 @@ class SolitaireModule extends GameModule {
 
   @override
   List<StatBlock> statBlocks(GameAggregate agg) {
-    final time = agg.metric('duration');
+    // Best time reads `cleanDuration`, which a session that used undo does not
+    // write — see the record-integrity policy in `.agents/CLAUDE.md` §7.3.
+    final time = agg.metric('cleanDuration');
     final moves = agg.metric('moves');
     final wins = agg.outcome(SessionOutcome.won);
     return [
@@ -78,7 +80,7 @@ class SolitaireModule extends GameModule {
         if (!agg.config(label).isEmpty)
           StatBlock.cells(title: label, cells: [
             StatCell.count('Deals', agg.config(label).sessions),
-            StatCell.metric('Best time', agg.config(label).metric('duration'),
+            StatCell.metric('Best time', agg.config(label).metric('cleanDuration'),
                 StatFormat.duration, higherIsBetter: false),
           ]),
     ];
@@ -86,7 +88,7 @@ class SolitaireModule extends GameModule {
 
   @override
   String? statSummary(GameAggregate agg) {
-    final best = agg.metric('duration').best(higherIsBetter: false);
+    final best = agg.metric('cleanDuration').best(higherIsBetter: false);
     return best == null ? null : 'Best ${StatFormat.duration.render(best)}';
   }
 

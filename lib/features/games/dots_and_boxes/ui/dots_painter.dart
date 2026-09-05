@@ -11,6 +11,9 @@ import '../logic/dots_and_boxes.dart';
 /// colour**. The board stays monochrome, so the two seat colours are free to
 /// mean ownership and nothing else.
 ///
+/// The board is a `cols × rows` grid — never assumed square — and its cell comes
+/// from the shared board fitter, so a 10 × 6 and a 6 × 10 both fill the screen.
+///
 /// Ownership comes from [identities], the shared seat palette — fixed hues that
 /// do not follow the theme, each with its own shape. The shape is why the mark
 /// inside a claimed box is a circle or a triangle rather than an "A" or a "B":
@@ -25,6 +28,7 @@ class DotsPainter extends CustomPainter {
     required this.ink,
     required this.border,
     required this.claimMarks,
+    required this.lightMode,
     required this.settling,
     required this.settle,
   });
@@ -33,12 +37,15 @@ class DotsPainter extends CustomPainter {
   final double cell;
   final double margin;
 
-  /// The two seats, in player order. Never a theme colour.
+  /// The seats, in player order (two to four). Never a theme colour.
   final List<PlayerIdentity> identities;
 
   final Color ink;
   final Color border;
   final bool claimMarks;
+
+  /// The seat hairline is mandatory in Light — see [identityOutline].
+  final bool lightMode;
 
   /// Row-major indices of the boxes claimed by the last move — the only ones
   /// [settle] applies to.
@@ -56,6 +63,9 @@ class DotsPainter extends CustomPainter {
   Offset _dot(int row, int col) =>
       Offset(margin + col * cell, margin + row * cell);
 
+  /// Row-major index of a box, the key the settle set is expressed in.
+  int _boxIndex(int r, int c) => r * game.cols + c;
+
   @override
   void paint(Canvas canvas, Size size) {
     final hairline = Paint()
@@ -68,8 +78,8 @@ class DotsPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
 
     // Claimed boxes first, so lines sit on top of their tint.
-    for (var r = 0; r < game.size; r++) {
-      for (var c = 0; c < game.size; c++) {
+    for (var r = 0; r < game.rows; r++) {
+      for (var c = 0; c < game.cols; c++) {
         final owner = game.ownerAt(r, c);
         if (owner == -1) continue;
         final identity = identities[owner];
@@ -79,14 +89,14 @@ class DotsPainter extends CustomPainter {
           Paint()..color = identity.color.withValues(alpha: 0.16),
         );
         if (claimMarks) {
-          final scale = settling.contains(r * game.size + c) ? settle : 1.0;
+          final scale = settling.contains(_boxIndex(r, c)) ? settle : 1.0;
           _mark(canvas, topLeft + Offset(cell / 2, cell / 2), identity, scale);
         }
       }
     }
 
-    for (var r = 0; r <= game.size; r++) {
-      for (var c = 0; c < game.size; c++) {
+    for (var r = 0; r <= game.rows; r++) {
+      for (var c = 0; c < game.cols; c++) {
         final a = _dot(r, c), b = _dot(r, c + 1);
         canvas.drawLine(
           a + const Offset(_inset, 0),
@@ -95,8 +105,8 @@ class DotsPainter extends CustomPainter {
         );
       }
     }
-    for (var r = 0; r < game.size; r++) {
-      for (var c = 0; c <= game.size; c++) {
+    for (var r = 0; r < game.rows; r++) {
+      for (var c = 0; c <= game.cols; c++) {
         final a = _dot(r, c), b = _dot(r + 1, c);
         canvas.drawLine(
           a + const Offset(0, _inset),
@@ -107,8 +117,8 @@ class DotsPainter extends CustomPainter {
     }
 
     final dotPaint = Paint()..color = ink;
-    for (var r = 0; r <= game.size; r++) {
-      for (var c = 0; c <= game.size; c++) {
+    for (var r = 0; r <= game.rows; r++) {
+      for (var c = 0; c <= game.cols; c++) {
         canvas.drawCircle(_dot(r, c), _dotRadius, dotPaint);
       }
     }
@@ -120,20 +130,19 @@ class DotsPainter extends CustomPainter {
   void _mark(Canvas canvas, Offset centre, PlayerIdentity identity, double scale) {
     final radius = cell * 0.17 * scale;
     if (radius <= 0) return;
-    canvas.drawPath(
-      playerShapePath(identity.shape, centre, radius),
-      Paint()
-        ..color = identity.color.withValues(alpha: 0.75)
-        ..isAntiAlias = true,
-    );
+    paintPlayerToken(canvas, identity, centre, radius,
+        opacity: 0.75, lightMode: lightMode);
   }
 
   /// The edge nearest [point], or null when the tap is closer to no edge than
   /// [tolerance]. One hit test for both orientations, so a tap between two
   /// lines picks the nearer rather than the first found.
-  BoxEdge? edgeAt(Offset point, {double tolerance = 22}) {
+  BoxEdge? edgeAt(Offset point, {double? tolerance}) {
     BoxEdge? best;
-    var bestDistance = tolerance;
+    // The reach scales with the cell: a 12-column board on a phone has cells
+    // half the size of a 3-column one, and a constant would then swallow two
+    // edges at once.
+    var bestDistance = tolerance ?? cell * 0.45;
 
     void consider(BoxEdge edge, Offset a, Offset b) {
       final d = _distanceToSegment(point, a, b);
@@ -143,13 +152,13 @@ class DotsPainter extends CustomPainter {
       }
     }
 
-    for (var r = 0; r <= game.size; r++) {
-      for (var c = 0; c < game.size; c++) {
+    for (var r = 0; r <= game.rows; r++) {
+      for (var c = 0; c < game.cols; c++) {
         consider(BoxEdge(EdgeKind.horizontal, r, c), _dot(r, c), _dot(r, c + 1));
       }
     }
-    for (var r = 0; r < game.size; r++) {
-      for (var c = 0; c <= game.size; c++) {
+    for (var r = 0; r < game.rows; r++) {
+      for (var c = 0; c <= game.cols; c++) {
         consider(BoxEdge(EdgeKind.vertical, r, c), _dot(r, c), _dot(r + 1, c));
       }
     }

@@ -57,7 +57,7 @@ class ArcadeScaffold extends ConsumerStatefulWidget {
 
   final String? best;
   final bool isNewBest;
-  final Widget Function(BuildContext, String)? stylePreviewBuilder;
+  final StylePreviewBuilder? stylePreviewBuilder;
 
   /// Optional quiet line under the arena (Reaction uses it to carry state,
   /// because colour must never carry it alone).

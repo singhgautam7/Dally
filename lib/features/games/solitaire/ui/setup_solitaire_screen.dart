@@ -50,7 +50,7 @@ class _SetupSolitaireScreenState extends ConsumerState<SetupSolitaireScreen> {
   }
 
   String _bestLine(GameAggregate agg) {
-    final best = agg.metric('duration').best(higherIsBetter: false);
+    final best = agg.metric('cleanDuration').best(higherIsBetter: false);
     if (best == null) return '';
     final seconds = best.round();
     return 'Best ${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';

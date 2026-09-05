@@ -18,16 +18,31 @@ Future<void> recordSession(
   String configLabel = '',
   num? score,
   Map<String, num> extras = const {},
+  bool usedUndo = false,
 }) {
+  // Record integrity (`.agents/CLAUDE.md` §7.3). Everything here is written
+  // once, at the end of a game, from the final state — so an undone move can
+  // never double-count. What undo *could* still corrupt is a record: a best
+  // score or a best time earned by rewinding a mistake.
+  //
+  // A flagged session therefore still counts as a game played, still counts
+  // toward wins, losses and play time, and still appears in history. It is
+  // excluded only from the two record-shaped metrics: `score` is dropped, and
+  // `cleanDuration` — the metric a best *time* is read from — is not written.
+  // Plain `duration` keeps counting, so averages and play time stay true.
+  final seconds = durationSeconds < 0 ? 0 : durationSeconds;
   return ref.read(historyRepositoryProvider).record(
         GameSession(
           gameId: gameId,
           startedAt: startedAt,
-          durationSeconds: durationSeconds < 0 ? 0 : durationSeconds,
+          durationSeconds: seconds,
           outcome: outcome,
           configLabel: configLabel,
-          score: score,
-          extras: extras,
+          score: usedUndo ? null : score,
+          extras: {
+            ...extras,
+            if (usedUndo) 'usedUndo': 1 else 'cleanDuration': seconds,
+          },
         ),
       );
 }

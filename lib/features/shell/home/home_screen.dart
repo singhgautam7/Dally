@@ -228,7 +228,7 @@ class _SectionedGrid extends ConsumerWidget {
                     title: m.title,
                     glyphAsset: m.id,
                     vibe: m.vibeLabel,
-                    passAndPlay: m.players.contains(PlayerMode.passAndPlay),
+                    seats: m.players.contains(PlayerMode.passAndPlay) ? m.playerCount : null,
                     best: m.homeBestLabel(stats),
                     onTap: () => onOpen(m),
                   ),

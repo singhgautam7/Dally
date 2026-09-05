@@ -39,14 +39,36 @@ class JumperModule extends GameModule {
   List<String> get tags => const ['jump', 'platform', 'climb', 'endless', 'height', 'arcade'];
 
   @override
-  String get styleNoun => 'Blocks';
+  String get styleNoun => 'Platform';
 
+  /// The platform row keeps the bare `jumper` key, so nobody's existing choice
+  /// is orphaned by the character row arriving beside it.
   @override
   List<StyleOption> get styleOptions => const [
         StyleOption(id: 'blocks', label: 'Blocks', recommended: true),
         StyleOption(id: 'hairline', label: 'Hairline'),
         StyleOption(id: 'pixel', label: 'Pixel'),
-  ];
+      ];
+
+  /// Two rows: the character the player watches, then the platforms. The
+  /// character comes first because it is the thing being steered.
+  @override
+  List<StyleGroup> get styleGroups => const [
+        StyleGroup(id: 'character', label: 'Character', options: [
+          StyleOption(id: 'square', label: 'Square', recommended: true),
+          StyleOption(id: 'disc', label: 'Disc'),
+          StyleOption(id: 'arrow', label: 'Arrow'),
+          StyleOption(id: 'pixel', label: 'Pixel'),
+        ]),
+        StyleGroup(id: '', label: 'Platforms', options: [
+          StyleOption(id: 'blocks', label: 'Blocks', recommended: true),
+          StyleOption(id: 'hairline', label: 'Hairline'),
+          StyleOption(id: 'pixel', label: 'Pixel'),
+        ]),
+      ];
+
+  /// One row by id, so the play screen never depends on their order.
+  StyleGroup styleGroup(String id) => styleGroups.firstWhere((g) => g.id == id);
 
   @override
   bool get supportsSaveResume => false;

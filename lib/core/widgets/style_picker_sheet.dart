@@ -11,9 +11,29 @@ import 'pause_sheet.dart';
 import 'primary_pill.dart';
 import 'dally_sheet.dart';
 
-/// The selected style id for [gameId], falling back to the module's
-/// recommended/first option. One place resolves this, so a game never has to
-/// remember its own default.
+/// Builds a preview for one option: `(context, groupId, styleId)`. The group id
+/// is what keeps two rows apart when they share an option id — Jumper has a
+/// "Pixel" character *and* a "Pixel" platform.
+typedef StylePreviewBuilder = Widget Function(
+    BuildContext context, String groupId, String styleId);
+
+/// Where a row's choice is stored. A game's primary row keeps the bare `gameId`
+/// key so nobody's existing choice is orphaned; extra rows hang off it.
+String styleKeyFor(GameModule module, StyleGroup group) =>
+    group.id.isEmpty ? module.id : '${module.id}.${group.id}';
+
+/// The selected style id for a [group], falling back to its recommended/first
+/// option. One place resolves this, so a game never has to remember its own
+/// default.
+String styleIdForGroup(WidgetRef ref, GameModule module, StyleGroup group) {
+  final key = styleKeyFor(module, group);
+  final chosen = ref.watch(settingsControllerProvider.select((s) => s.styleChoices[key]));
+  if (chosen != null && group.options.any((o) => o.id == chosen)) return chosen;
+  return group.defaultId ?? '';
+}
+
+/// The selected style id for the module's *primary* row — what a
+/// single-row game means when it says "the style".
 String styleIdFor(WidgetRef ref, GameModule module) {
   final chosen = ref.watch(settingsControllerProvider.select((s) => s.styleChoices[module.id]));
   if (chosen != null && module.styleOptions.any((o) => o.id == chosen)) return chosen;
@@ -27,17 +47,27 @@ String readStyleId(WidgetRef ref, GameModule module) {
   return module.defaultStyleId ?? '';
 }
 
+String _readGroupId(WidgetRef ref, GameModule module, StyleGroup group) {
+  final chosen = ref.read(settingsControllerProvider).styleChoices[styleKeyFor(module, group)];
+  if (chosen != null && group.options.any((o) => o.id == chosen)) return chosen;
+  return group.defaultId ?? '';
+}
+
 /// The generalised style picker — one sheet for Chess pieces, Minesweeper
 /// flags, Snake skins, coins, dice, the spinner and the arcade games.
 ///
 /// A style is **geometry only**: previews render with live theme tokens, which
-/// is what guarantees any style works in all eight palettes. Selection is per
-/// game, persisted locally, and applied on close with no toast.
+/// is what guarantees any style works in every palette. Selection is per game,
+/// persisted locally, and applied on close with no toast.
+///
+/// The sheet holds **one or more labelled rows** ([GameModule.styleGroups]),
+/// each with its own persistence key. A game with a single row keeps exactly
+/// the layout it had.
 Future<void> showStylePicker(
   BuildContext context,
   WidgetRef ref, {
   required GameModule module,
-  required Widget Function(BuildContext context, String styleId) previewBuilder,
+  required StylePreviewBuilder previewBuilder,
   String? scopeLine,
 }) {
   return showDallySheet<void>(
@@ -58,17 +88,19 @@ Widget? stylePickerRow(
   BuildContext context,
   WidgetRef ref, {
   required GameModule module,
-  required Widget Function(BuildContext context, String styleId) previewBuilder,
+  required StylePreviewBuilder previewBuilder,
   VoidCallback? onClosed,
 }) {
-  if (module.styleOptions.length < 2) return null;
-  final current = readStyleId(ref, module);
-  final label = module.styleOptions
-      .firstWhere((o) => o.id == current, orElse: () => module.styleOptions.first)
+  final groups = module.styleGroups;
+  if (groups.isEmpty || groups.every((g) => g.options.length < 2)) return null;
+  final first = groups.first;
+  final current = _readGroupId(ref, module, first);
+  final label = first.options
+      .firstWhere((o) => o.id == current, orElse: () => first.options.first)
       .label;
   final t = context.tokens;
   return PauseRow(
-    label: '${module.styleNoun} style',
+    label: groups.length > 1 ? 'Style' : '${module.styleNoun} style',
     trailing: Text(label, style: DallyType.body.copyWith(fontSize: 13, color: t.textFaint)),
     onTap: () async {
       Navigator.of(context).pop();
@@ -86,7 +118,7 @@ class _StylePickerBody extends ConsumerStatefulWidget {
   });
 
   final GameModule module;
-  final Widget Function(BuildContext, String) previewBuilder;
+  final StylePreviewBuilder previewBuilder;
   final String scopeLine;
 
   @override
@@ -94,59 +126,76 @@ class _StylePickerBody extends ConsumerStatefulWidget {
 }
 
 class _StylePickerBodyState extends ConsumerState<_StylePickerBody> {
-  late String _selected = readStyleId(ref, widget.module);
+  /// group id → selected option id, seeded from what is stored.
+  late final Map<String, String> _selected = {
+    for (final g in widget.module.styleGroups) g.id: _readGroupId(ref, widget.module, g),
+  };
 
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
-    final options = widget.module.styleOptions;
-    final label = options.firstWhere((o) => o.id == _selected, orElse: () => options.first).label;
+    final groups = widget.module.styleGroups;
+    final multi = groups.length > 1;
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(Insets.s5, 0, Insets.s5, Insets.s5),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('${widget.module.styleNoun} style',
-                style: DallyType.title.copyWith(color: t.textPrimary)),
-            const SizedBox(height: 5),
-            Text(widget.scopeLine,
-                style: DallyType.body.copyWith(fontSize: 12, color: t.textFaint)),
-            const Gap(Insets.s4),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: Insets.s3,
-                crossAxisSpacing: Insets.s3,
-                mainAxisExtent: 122,
-              ),
-              itemCount: options.length,
-              itemBuilder: (context, i) {
-                final o = options[i];
-                return _StyleCard(
-                  option: o,
-                  selected: o.id == _selected,
-                  preview: widget.previewBuilder(context, o.id),
-                  onTap: () {
-                    Haptics.selection(ref);
-                    setState(() => _selected = o.id);
+      // The row list is open-ended — two rows of four is already taller than a
+      // short phone at a large text scale.
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(Insets.s5, 0, Insets.s5, Insets.s5),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(multi ? 'Style' : '${widget.module.styleNoun} style',
+                  style: DallyType.title.copyWith(color: t.textPrimary)),
+              const SizedBox(height: 5),
+              Text(widget.scopeLine,
+                  style: DallyType.body.copyWith(fontSize: 12, color: t.textFaint)),
+              for (final group in groups) ...[
+                const Gap(Insets.s4),
+                if (multi) ...[
+                  Text(group.label.toUpperCase(),
+                      style: DallyType.label.copyWith(
+                          fontSize: 10, letterSpacing: 1.4, color: t.textFaint)),
+                  const Gap(Insets.s2),
+                ],
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: Insets.s3,
+                    crossAxisSpacing: Insets.s3,
+                    mainAxisExtent: 122,
+                  ),
+                  itemCount: group.options.length,
+                  itemBuilder: (context, i) {
+                    final o = group.options[i];
+                    return _StyleCard(
+                      option: o,
+                      selected: o.id == _selected[group.id],
+                      preview: widget.previewBuilder(context, group.id, o.id),
+                      onTap: () {
+                        Haptics.selection(ref);
+                        setState(() => _selected[group.id] = o.id);
+                      },
+                    );
                   },
-                );
-              },
-            ),
-            const Gap(Insets.s5),
-            PrimaryPill(
-              label: 'Use $label',
-              onPressed: () {
-                ref.read(settingsControllerProvider.notifier)
-                    .setStyleChoice(widget.module.id, _selected);
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
+                ),
+              ],
+              const Gap(Insets.s5),
+              PrimaryPill(
+                label: 'Use these',
+                onPressed: () {
+                  final controller = ref.read(settingsControllerProvider.notifier);
+                  for (final g in groups) {
+                    controller.setStyleChoice(styleKeyFor(widget.module, g), _selected[g.id]!);
+                  }
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );

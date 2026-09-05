@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../app_providers.dart';
 import '../storage/settings.dart';
+import 'accents.dart';
 import 'palette.dart';
 import 'palettes.dart';
 
@@ -20,8 +21,34 @@ class SettingsController extends Notifier<Settings> {
     await ref.read(settingsRepositoryProvider).save(next);
   }
 
+  // ── Theme: three independent axes ─────────────────────────────────────────
+
+  /// Applies a named preset by writing the triple it stands for. The preset
+  /// name itself is never stored — it is derived by matching the triple back,
+  /// so a preset renamed later cannot orphan anyone's settings.
+  Future<void> selectPreset(ThemePreset preset) => _persist(state.copyWith(
+        paletteId: preset.id,
+        themeMode: preset.mode.id,
+        accentId: preset.accentId,
+        amoled: preset.amoled,
+      ));
+
+  /// Legacy entry point, kept for callers that still hand over a preset id.
   Future<void> selectPalette(String paletteId) =>
-      _persist(state.copyWith(paletteId: paletteId));
+      selectPreset(DallyPalettes.presetById(paletteId) ?? DallyPalettes.fallback);
+
+  Future<void> setThemeMode(DallyMode mode) => _persist(state.copyWith(themeMode: mode.id));
+
+  Future<void> setAccent(String accentId) => _persist(state.copyWith(accentId: accentId));
+
+  /// Dark only. A stale `true` in Light is ignored by the derivation rather
+  /// than corrected here, so switching back to Dark restores what was chosen.
+  Future<void> setAmoled(bool value) => _persist(state.copyWith(amoled: value));
+
+  Future<void> setHighContrastText(bool value) =>
+      _persist(state.copyWith(highContrastText: value));
+
+  // ── Everything else ───────────────────────────────────────────────────────
 
   Future<void> setHaptics(bool value) =>
       _persist(state.copyWith(hapticsEnabled: value));
@@ -50,9 +77,53 @@ class SettingsController extends Notifier<Settings> {
   }
 }
 
-/// The active palette, derived from the persisted id. Unknown ids fall back to
-/// the default so a stale choice can never crash the app.
+/// The three theme axes, as one watchable value. Everything that cares about
+/// the *choice* rather than the resolved colours (the theme screen, the preset
+/// cards) reads this.
+class ThemeTriple {
+  const ThemeTriple(this.mode, this.accentId, this.amoled, {this.highContrastText = false});
+
+  final DallyMode mode;
+  final String accentId;
+  final bool amoled;
+  final bool highContrastText;
+
+  /// AMOLED only means anything in Dark.
+  bool get amoledActive => mode == DallyMode.dark && amoled;
+
+  /// The preset this triple names, or null when it is a custom combination.
+  ThemePreset? get preset => DallyPalettes.presetFor(mode, accentId, amoled);
+
+  @override
+  bool operator ==(Object other) =>
+      other is ThemeTriple &&
+      other.mode == mode &&
+      other.accentId == accentId &&
+      other.amoled == amoled &&
+      other.highContrastText == highContrastText;
+
+  @override
+  int get hashCode => Object.hash(mode, accentId, amoled, highContrastText);
+}
+
+final themeTripleProvider = Provider<ThemeTriple>((ref) {
+  final s = ref.watch(settingsControllerProvider.select((s) => ThemeTriple(
+        modeFromId(s.themeMode),
+        s.accentId,
+        s.amoled,
+        highContrastText: s.highContrastText,
+      )));
+  return s;
+});
+
+/// The active palette, derived from the three persisted axes. Unknown values
+/// fall back to Ink, so a stale choice can never crash the app.
 final paletteProvider = Provider<Palette>((ref) {
-  final id = ref.watch(settingsControllerProvider.select((s) => s.paletteId));
-  return DallyPalettes.byId(id);
+  final t = ref.watch(themeTripleProvider);
+  return DallyPalettes.palette(
+    mode: t.mode,
+    accentId: t.accentId,
+    amoled: t.amoled,
+    highContrastText: t.highContrastText,
+  );
 });

@@ -13,7 +13,7 @@ const List<int> _longPressSteps = [200, 300, 400, 500, 600];
 /// The preview handed to the shared [showStylePicker] — the existing flag and
 /// mine artwork, unchanged. The picker shell is now
 /// `core/widgets/style_picker_sheet.dart`, shared with every other game.
-Widget mineStylePreview(BuildContext context, String styleId) {
+Widget mineStylePreview(BuildContext context, String groupId, String styleId) {
   final t = context.tokens;
   return SizedBox(
     width: 56,

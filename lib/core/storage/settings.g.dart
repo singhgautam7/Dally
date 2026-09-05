@@ -7,8 +7,12 @@ part of 'settings.dart';
 // **************************************************************************
 
 _Settings _$SettingsFromJson(Map<String, dynamic> json) => _Settings(
-  schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 1,
+  schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 2,
   paletteId: json['paletteId'] as String? ?? 'ink',
+  themeMode: json['themeMode'] as String? ?? 'dark',
+  accentId: json['accentId'] as String? ?? 'azure',
+  amoled: json['amoled'] as bool? ?? false,
+  highContrastText: json['highContrastText'] as bool? ?? false,
   hapticsEnabled: json['hapticsEnabled'] as bool? ?? true,
   soundEnabled: json['soundEnabled'] as bool? ?? false,
   onScreenControls:
@@ -33,6 +37,10 @@ _Settings _$SettingsFromJson(Map<String, dynamic> json) => _Settings(
 Map<String, dynamic> _$SettingsToJson(_Settings instance) => <String, dynamic>{
   'schemaVersion': instance.schemaVersion,
   'paletteId': instance.paletteId,
+  'themeMode': instance.themeMode,
+  'accentId': instance.accentId,
+  'amoled': instance.amoled,
+  'highContrastText': instance.highContrastText,
   'hapticsEnabled': instance.hapticsEnabled,
   'soundEnabled': instance.soundEnabled,
   'onScreenControls': _$OnScreenControlsEnumMap[instance.onScreenControls]!,

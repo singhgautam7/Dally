@@ -1,8 +1,11 @@
 import 'dart:ui';
 
+import 'package:flutter/painting.dart' show HSVColor;
+
+import 'accents.dart';
 import 'palette.dart';
 
-/// Fixed Minesweeper digit colours for dark palettes (1–4 cool, 5–8 warm).
+/// Fixed Minesweeper digit colours for dark ramps (1–4 cool, 5–8 warm).
 const List<Color> _inkNumbers = [
   Color(0xFF6EA8FE),
   Color(0xFF38BDF8),
@@ -14,7 +17,7 @@ const List<Color> _inkNumbers = [
   Color(0xFFFB4E7E),
 ];
 
-/// Fixed Minesweeper digit colours for light palettes.
+/// Fixed Minesweeper digit colours for the light ramp.
 const List<Color> _paperNumbers = [
   Color(0xFF2563EB),
   Color(0xFF0E7490),
@@ -26,214 +29,226 @@ const List<Color> _paperNumbers = [
   Color(0xFFA21055),
 ];
 
-/// The eight v1 palettes — six standard, two premium AMOLED. Values are copied
-/// verbatim from `Dally Foundations.dc.html`.
+/// One of the eight shipped palettes, expressed as the triple it *is*.
+///
+/// That every palette is expressible this way is the test of whether the axes
+/// were the right ones: if a preset had needed a fourth input, the model would
+/// be wrong. Three of them carry a neutral tint, which is the thing a preset
+/// gives you that building it yourself does not.
+class ThemePreset {
+  const ThemePreset({
+    required this.id,
+    required this.name,
+    required this.mode,
+    required this.accentId,
+    required this.amoled,
+    this.tint = NeutralTint.canonical,
+    this.isPremium = false,
+  });
+
+  /// Stable key persisted in the old `paletteId` setting; the migration source.
+  final String id;
+  final String name;
+  final DallyMode mode;
+  final String accentId;
+  final bool amoled;
+  final NeutralTint tint;
+
+  /// The PRO badge, kept on the two AMOLED entries. Decorative in v1 — every
+  /// palette is unlocked. The toggle is the paid surface, not the preset.
+  final bool isPremium;
+
+  bool matches(DallyMode m, String accent, bool a) =>
+      mode == m && accentId == accent && amoled == a;
+}
+
+/// The palette layer. `palette(mode, accent, amoled)` is the whole API; the
+/// eight presets are named triples on top of it.
 class DallyPalettes {
   DallyPalettes._();
 
-  static const Palette ink = Palette(
-    id: 'ink',
-    name: 'Ink',
-    mode: 'dark',
-    isDark: true,
-    isAmoled: false,
-    isPremium: false,
-    bg: Color(0xFF0E0F12),
-    surface: Color(0xFF16181D),
-    surfaceAlt: Color(0xFF1E2127),
-    border: Color(0xFF2A2E36),
-    textPrimary: Color(0xFFECEDEF),
-    textMuted: Color(0xFF9AA0AB),
-    textFaint: Color(0xFF5A5F69),
-    accent: Color(0xFF6EA8FE),
-    success: Color(0xFF4ADE80),
-    danger: Color(0xFFF87171),
-    onAccent: Color(0xFF0E0F12),
-    minesweeperNumbers: _inkNumbers,
-    scalePeak: Color(0xFFB4D4FF),
-  );
-
-  static const Palette ember = Palette(
-    id: 'ember',
-    name: 'Ember',
-    mode: 'dark · warm',
-    isDark: true,
-    isAmoled: false,
-    isPremium: false,
-    bg: Color(0xFF14100C),
-    surface: Color(0xFF1E1811),
-    surfaceAlt: Color(0xFF271F16),
-    border: Color(0xFF3A2E20),
-    textPrimary: Color(0xFFF3ECE2),
-    textMuted: Color(0xFFB7A48E),
-    textFaint: Color(0xFF7A6A52),
-    accent: Color(0xFFF5A524),
-    success: Color(0xFF86C34C),
-    danger: Color(0xFFEF6A5B),
-    onAccent: Color(0xFF14100C),
-    minesweeperNumbers: _inkNumbers,
-    scalePeak: Color(0xFFFBD9A0),
-  );
-
-  static const Palette tide = Palette(
-    id: 'tide',
-    name: 'Tide',
-    mode: 'dark · cool',
-    isDark: true,
-    isAmoled: false,
-    isPremium: false,
-    bg: Color(0xFF0A0F14),
-    surface: Color(0xFF10171F),
-    surfaceAlt: Color(0xFF16202B),
-    border: Color(0xFF223140),
-    textPrimary: Color(0xFFE5EEF5),
-    textMuted: Color(0xFF90A4B4),
-    textFaint: Color(0xFF5B6E7E),
-    accent: Color(0xFF38BDF8),
-    success: Color(0xFF4ADE80),
-    danger: Color(0xFFFB7185),
-    onAccent: Color(0xFF0A0F14),
-    minesweeperNumbers: _inkNumbers,
-    scalePeak: Color(0xFFB8E6FF),
-  );
-
-  static const Palette paper = Palette(
-    id: 'paper',
-    name: 'Paper',
-    mode: 'light',
-    isDark: false,
-    isAmoled: false,
-    isPremium: false,
-    bg: Color(0xFFF7F5F0),
-    surface: Color(0xFFFFFFFF),
-    surfaceAlt: Color(0xFFEFEBE3),
-    border: Color(0xFFDED9CE),
-    textPrimary: Color(0xFF1E1B16),
-    textMuted: Color(0xFF6B655B),
-    textFaint: Color(0xFFA9A398),
-    accent: Color(0xFF2563EB),
-    success: Color(0xFF16A34A),
-    danger: Color(0xFFDC2626),
-    onAccent: Color(0xFFFFFFFF),
-    minesweeperNumbers: _paperNumbers,
-    scalePeak: Color(0xFF16409E),
-  );
-
-  static const Palette meadow = Palette(
-    id: 'meadow',
-    name: 'Meadow',
-    mode: 'light · green',
-    isDark: false,
-    isAmoled: false,
-    isPremium: false,
-    bg: Color(0xFFF2F6F0),
-    surface: Color(0xFFFFFFFF),
-    surfaceAlt: Color(0xFFE7EFE4),
-    border: Color(0xFFD2DECC),
-    textPrimary: Color(0xFF17211A),
-    textMuted: Color(0xFF5E6B60),
-    textFaint: Color(0xFF97A491),
-    accent: Color(0xFF2E9E5B),
-    success: Color(0xFF16A34A),
-    danger: Color(0xFFDC2626),
-    onAccent: Color(0xFFFFFFFF),
-    minesweeperNumbers: _paperNumbers,
-    scalePeak: Color(0xFF12613A),
-  );
-
-  static const Palette blush = Palette(
-    id: 'blush',
-    name: 'Blush',
-    mode: 'light · rose',
-    isDark: false,
-    isAmoled: false,
-    isPremium: false,
-    bg: Color(0xFFFBF3F5),
-    surface: Color(0xFFFFFFFF),
-    surfaceAlt: Color(0xFFF5E7EC),
-    border: Color(0xFFE7D2DA),
-    textPrimary: Color(0xFF221A1E),
-    textMuted: Color(0xFF766068),
-    textFaint: Color(0xFFB49BA4),
-    accent: Color(0xFFC13B7A),
-    success: Color(0xFF16A34A),
-    danger: Color(0xFFDC2626),
-    onAccent: Color(0xFFFFFFFF),
-    minesweeperNumbers: _paperNumbers,
-    scalePeak: Color(0xFF7A264D),
-  );
-
-  static const Palette void_ = Palette(
-    id: 'void',
-    name: 'Void',
-    mode: 'amoled · neutral',
-    isDark: true,
-    isAmoled: true,
-    isPremium: true,
-    bg: Color(0xFF000000),
-    surface: Color(0xFF000000),
-    surfaceAlt: Color(0xFF101014),
-    border: Color(0xFF1E1E24),
-    textPrimary: Color(0xFFF4F4F6),
-    textMuted: Color(0xFF8A8A94),
-    textFaint: Color(0xFF4A4A52),
-    accent: Color(0xFF7AA2FF),
-    success: Color(0xFF4ADE80),
-    danger: Color(0xFFFF6B6B),
-    onAccent: Color(0xFF000000),
-    minesweeperNumbers: _inkNumbers,
-    scalePeak: Color(0xFFB4D4FF),
-  );
-
-  static const Palette neon = Palette(
-    id: 'neon',
-    name: 'Neon',
-    mode: 'amoled · accent',
-    isDark: true,
-    isAmoled: true,
-    isPremium: true,
-    bg: Color(0xFF000000),
-    surface: Color(0xFF000000),
-    surfaceAlt: Color(0xFF0C0A12),
-    border: Color(0xFF241C2E),
-    textPrimary: Color(0xFFF2ECFA),
-    textMuted: Color(0xFFA08FB4),
-    textFaint: Color(0xFF5A4A6E),
-    accent: Color(0xFFC46BFF),
-    success: Color(0xFF4ADE80),
-    danger: Color(0xFFFF5FA2),
-    onAccent: Color(0xFF000000),
-    minesweeperNumbers: _inkNumbers,
-    scalePeak: Color(0xFFE6C4FF),
-  );
-
-  /// Six standard palettes, in the order the theme picker lists them.
-  static const List<Palette> standard = [ink, ember, tide, paper, meadow, blush];
-
-  /// Two premium AMOLED palettes.
-  static const List<Palette> premium = [void_, neon];
-
-  /// All palettes.
-  static const List<Palette> all = [
-    ink,
-    ember,
-    tide,
-    paper,
-    meadow,
-    blush,
-    void_,
-    neon,
+  /// The eight shipped palettes, in picker order. Names and order are frozen.
+  static const List<ThemePreset> presets = [
+    ThemePreset(id: 'ink', name: 'Ink', mode: DallyMode.dark, accentId: 'azure', amoled: false),
+    ThemePreset(
+        id: 'ember',
+        name: 'Ember',
+        mode: DallyMode.dark,
+        accentId: 'ember',
+        amoled: false,
+        tint: NeutralTint.warm),
+    ThemePreset(id: 'tide', name: 'Tide', mode: DallyMode.dark, accentId: 'tide', amoled: false),
+    ThemePreset(id: 'paper', name: 'Paper', mode: DallyMode.light, accentId: 'azure', amoled: false),
+    ThemePreset(
+        id: 'meadow',
+        name: 'Meadow',
+        mode: DallyMode.light,
+        accentId: 'meadow',
+        amoled: false,
+        tint: NeutralTint.towardAccent),
+    ThemePreset(
+        id: 'blush',
+        name: 'Blush',
+        mode: DallyMode.light,
+        accentId: 'blush',
+        amoled: false,
+        tint: NeutralTint.towardAccent),
+    ThemePreset(
+        id: 'void',
+        name: 'Void',
+        mode: DallyMode.dark,
+        accentId: 'azure',
+        amoled: true,
+        isPremium: true),
+    ThemePreset(
+        id: 'neon',
+        name: 'Neon',
+        mode: DallyMode.dark,
+        accentId: 'neon',
+        amoled: true,
+        isPremium: true),
   ];
 
-  /// The default palette on first launch.
-  static const Palette fallback = ink;
+  /// Six standard presets, in the order the theme screen lists them.
+  static List<ThemePreset> get standard =>
+      [for (final p in presets) if (!p.isPremium) p];
 
-  /// Look up by stable id, falling back to [fallback] for unknown ids so a
-  /// stale persisted choice can never crash the app.
-  static Palette byId(String? id) {
-    for (final p in all) {
+  /// The two AMOLED presets.
+  static List<ThemePreset> get premium =>
+      [for (final p in presets) if (p.isPremium) p];
+
+  /// The default on first launch: Ink — Dark, Azure, AMOLED off.
+  static const ThemePreset fallback = ThemePreset(
+      id: 'ink', name: 'Ink', mode: DallyMode.dark, accentId: 'azure', amoled: false);
+
+  static ThemePreset? presetById(String? id) {
+    for (final p in presets) {
       if (p.id == id) return p;
     }
-    return fallback;
+    return null;
   }
+
+  /// The preset a triple names, or null when it matches none — in which case
+  /// the screen calls it Custom. The preset name is **derived**, never stored,
+  /// so renaming a preset later cannot orphan anyone's settings.
+  static ThemePreset? presetFor(DallyMode mode, String accentId, bool amoled) {
+    for (final p in presets) {
+      if (p.matches(mode, accentId, amoled)) return p;
+    }
+    return null;
+  }
+
+  /// The palette for a triple.
+  ///
+  /// Pure, synchronous, no I/O: eight of the eleven tokens are a table lookup,
+  /// two are computed from the accent, and one is a ratio comparison. Cheap
+  /// enough to call on every build rather than caching, which is what keeps a
+  /// mid-game switch instant.
+  ///
+  /// A triple that names a preset takes that preset's identity — its name, its
+  /// PRO badge and its neutral tint — so the eight palettes and the three
+  /// controls can never contradict each other.
+  static Palette palette({
+    required DallyMode mode,
+    required String accentId,
+    required bool amoled,
+    bool highContrastText = false,
+  }) {
+    final preset = presetFor(mode, accentId, amoled);
+    return build(
+      mode: mode,
+      accentId: accentId,
+      amoled: amoled,
+      tint: preset?.tint ?? NeutralTint.canonical,
+      id: preset?.id ?? 'custom',
+      name: preset?.name ?? 'Custom',
+      isPremium: preset?.isPremium ?? false,
+      highContrastText: highContrastText,
+    );
+  }
+
+  /// The palette a named preset renders as.
+  static Palette ofPreset(ThemePreset p, {bool highContrastText = false}) => build(
+        mode: p.mode,
+        accentId: p.accentId,
+        amoled: p.amoled,
+        tint: p.tint,
+        id: p.id,
+        name: p.name,
+        isPremium: p.isPremium,
+        highContrastText: highContrastText,
+      );
+
+  /// The derivation itself. Every token's rule is documented at its line.
+  static Palette build({
+    required DallyMode mode,
+    required String accentId,
+    required bool amoled,
+    NeutralTint tint = NeutralTint.canonical,
+    String id = 'custom',
+    String name = 'Custom',
+    bool isPremium = false,
+    bool highContrastText = false,
+  }) {
+    // AMOLED is Dark-only by construction, so a stale `true` in Light can never
+    // produce a black-on-white palette.
+    final black = mode == DallyMode.dark && amoled;
+    final ramp = rampFor(mode, black);
+    final accentIdentity = accentById(accentId);
+    final accent = accentIdentity.resolve(mode);
+
+    // Neutral tint — a hue rotation at constant lightness. Presets only.
+    final hue = switch (tint) {
+      NeutralTint.canonical => null,
+      NeutralTint.warm => 32.0,
+      NeutralTint.towardAccent => HSVColor.fromColor(accent).hue,
+    };
+    final boost = tint == NeutralTint.towardAccent ? 1.6 : 1.0;
+    Color n(Color c) => hue == null ? c : tintNeutral(c, hue, boost);
+
+    final textFaint = highContrastText
+        ? (mode == DallyMode.light ? kLightFaintHC : kDarkFaintHC)
+        : ramp.textFaint;
+    final textMuted = highContrastText
+        ? (mode == DallyMode.light ? kLightMutedHC : kDarkMutedHC)
+        : ramp.textMuted;
+
+    return Palette(
+      id: id,
+      name: name,
+      mode: mode,
+      accentId: accentIdentity.id,
+      isAmoled: black,
+      isPremium: isPremium,
+      // Straight lookup into one of the three ramps — accent-independent by
+      // construction, which is what makes thirty combinations checkable as ten.
+      bg: n(ramp.bg),
+      surface: n(ramp.surface),
+      surfaceAlt: n(ramp.surfaceAlt),
+      border: n(ramp.border),
+      textPrimary: n(ramp.textPrimary),
+      textMuted: n(textMuted),
+      textFaint: n(textFaint),
+      accent: accent,
+      // Fixed semantic hues, independent of the accent.
+      success: mode == DallyMode.light ? kLightSuccess : kDarkSuccess,
+      danger: mode == DallyMode.light ? kLightDanger : kDarkDanger,
+      // Computed, never authored: whichever of ink and white scores higher
+      // against the resolved accent. Ink here is the *ink* — the Light ramp's
+      // near-black — not the mode's own text colour, which in Dark is already
+      // near-white and would leave a filled button with two white candidates.
+      onAccent: bestForegroundOn(accent, ink: kLightRamp.textPrimary),
+      minesweeperNumbers: mode == DallyMode.light ? _paperNumbers : _inkNumbers,
+      scaleMid: ramp.scaleMid,
+      scalePeak: ramp.scalePeak,
+    );
+  }
+
+  /// Every palette a *preset* names, for the picker and for tests that want to
+  /// walk the shipped set.
+  static List<Palette> get all => [for (final p in presets) ofPreset(p)];
+
+  /// Legacy lookup by preset id, still used by tests and by anything holding a
+  /// stale `paletteId`. Unknown ids fall back to Ink.
+  static Palette byId(String? id) => ofPreset(presetById(id) ?? fallback);
 }

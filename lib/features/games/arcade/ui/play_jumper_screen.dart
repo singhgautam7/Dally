@@ -9,6 +9,7 @@ import '../../../../core/services/haptics.dart';
 import '../../../../core/storage/game_session.dart';
 import '../../../../core/theme/dally_tokens.dart';
 import '../../../../core/widgets/style_picker_sheet.dart';
+import '../jumper_module.dart';
 import '../logic/jumper_core.dart';
 import 'arcade_painters.dart';
 import 'arcade_scaffold.dart';
@@ -114,7 +115,13 @@ class _PlayJumperScreenState extends ConsumerState<PlayJumperScreen>
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
-    final style = jumperStyleFromId(styleIdFor(ref, widget.module));
+    // Two rows now: the character the player watches, and the platforms that
+    // shipped. Looked up by id, never by position.
+    final module = widget.module as JumperModule;
+    final style =
+        jumperStyleFromId(styleIdForGroup(ref, module, module.styleGroup('')));
+    final character = jumperCharacterFromId(
+        styleIdForGroup(ref, module, module.styleGroup('character')));
     final core = _core;
 
     return ArcadeScaffold(
@@ -132,7 +139,9 @@ class _PlayJumperScreenState extends ConsumerState<PlayJumperScreen>
         resumeFromUi();
         _startRun();
       },
-      stylePreviewBuilder: (context, id) => _StylePreview(style: jumperStyleFromId(id)),
+      stylePreviewBuilder: (context, groupId, id) => groupId == 'character'
+          ? _CharacterPreview(character: jumperCharacterFromId(id))
+          : _StylePreview(style: jumperStyleFromId(id)),
       arena: (context, size) {
         _ensureCore(size);
         return Stack(
@@ -142,6 +151,7 @@ class _PlayJumperScreenState extends ConsumerState<PlayJumperScreen>
                 painter: JumperPainter(
                   core: _core!,
                   style: style,
+                  character: character,
                   accent: t.accent,
                   ink: t.textPrimary,
                   border: t.border,
@@ -179,6 +189,41 @@ class _SteerPad extends StatelessWidget {
         onLongPressStart: (_) => onDown(),
         onLongPressEnd: (_) => onUp(),
       );
+}
+
+/// The character preview: the silhouette alone, in the live theme, at the size
+/// it is drawn on the board.
+class _CharacterPreview extends StatelessWidget {
+  const _CharacterPreview({required this.character});
+  final JumperCharacter character;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: 34,
+        height: 34,
+        child: CustomPaint(
+            painter: _CharacterPainter(character, context.tokens.accent)),
+      );
+}
+
+class _CharacterPainter extends CustomPainter {
+  const _CharacterPainter(this.character, this.colour);
+  final JumperCharacter character;
+  final Color colour;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final box = Rect.fromCenter(
+        center: size.center(Offset.zero), width: 26, height: 26);
+    canvas.saveLayer(box.inflate(2), Paint());
+    // Facing right, so the two directional characters show what they do.
+    paintJumperCharacter(canvas, character, box, colour, facing: 1);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_CharacterPainter old) =>
+      old.character != character || old.colour != colour;
 }
 
 class _StylePreview extends StatelessWidget {

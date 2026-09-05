@@ -19,6 +19,7 @@ class SnakesPainter extends CustomPainter {
     required this.border,
     required this.surface,
     required this.surfaceAlt,
+    required this.lightMode,
     required this.textFaint,
     required this.animatedPositions,
     required this.tokenStyle,
@@ -29,6 +30,9 @@ class SnakesPainter extends CustomPainter {
   final List<PlayerIdentity> identities;
   final Color ink;
   final Color border;
+  /// The seat hairline is mandatory in Light — see [identityOutline].
+  final bool lightMode;
+
   final Color surface;
   final Color surfaceAlt;
   final Color textFaint;
@@ -170,6 +174,7 @@ class SnakesPainter extends CustomPainter {
         ringWidth: math.max(1, _cell * 0.04),
         style: tokenStyle,
         knockout: surface,
+        lightMode: lightMode,
       );
     }
   }

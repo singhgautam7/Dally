@@ -64,7 +64,8 @@ class SudokuModule extends GameModule {
         blocks.add(StatBlock.waiting(title: label, waitingFor: 'Not played yet.'));
       } else {
         blocks.add(StatBlock.cells(title: label, cells: [
-          StatCell.metric('Best time', c.metric('duration'), StatFormat.duration,
+          // `cleanDuration` is written only by a session that never used undo.
+          StatCell.metric('Best time', c.metric('cleanDuration'), StatFormat.duration,
               higherIsBetter: false, accent: true),
           StatCell.average('Average', c.metric('duration'), StatFormat.duration),
           StatCell('Solved', '${c.outcome(SessionOutcome.solved)}/${c.sessions}',

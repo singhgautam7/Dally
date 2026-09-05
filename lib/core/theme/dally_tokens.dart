@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'accents.dart' show contrastRatio;
 import 'palette.dart';
 
 /// The token bundle every widget reads via
@@ -81,9 +82,14 @@ class DallyTokens extends ThemeExtension<DallyTokens> {
   bool get isDark => palette.isDark;
 
   /// True when an elevated [surface] is indistinguishable from [bg] — i.e. on
-  /// the AMOLED palettes, where both are pure black. Surface-filled containers
-  /// (score cards, chips, sheets) must then draw a hairline to stay legible.
-  bool get surfaceNeedsOutline => surface.toARGB32() == bg.toARGB32();
+  /// AMOLED, where the background is true black and the surface sits almost on
+  /// it. Surface-filled containers (score cards, chips, sheets) must then draw
+  /// a hairline to stay legible.
+  ///
+  /// Measured rather than compared: the AMOLED ramp's surface is `#0A0B0D`
+  /// against a `#000000` background, which is a different value and the same
+  /// pixel to the eye. An equality check missed exactly that case.
+  bool get surfaceNeedsOutline => contrastRatio(surface, bg) < 1.12;
 
   /// A hairline for surface containers: the border colour on AMOLED where the
   /// fill alone is invisible, otherwise null (keeps the flat look elsewhere).

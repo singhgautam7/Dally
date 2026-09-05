@@ -34,28 +34,47 @@ class MoveResult {
   final bool finished;
 }
 
-/// Dots & Boxes for two players on one device, on an `n × n` grid of boxes.
+/// Dots & Boxes for two to four players on one device, on a `cols × rows` grid
+/// of boxes.
+///
+/// **Rows and columns are independent** (3–12 each, either way round): a 10 × 6
+/// and a 6 × 10 are both legal boards, not two views of one. Nothing here
+/// assumes a square, which is what let the shared board fitter replace the
+/// hand-tuned constant the square version carried.
 ///
 /// Pure logic: no widgets, no clock, no randomness. The board is addressed by
-/// dots at `(row, col)` for `0 <= row, col <= size`, and the boxes between them.
+/// dots at `(row, col)` for `0 <= row <= rows`, `0 <= col <= cols`, and the
+/// boxes between them.
 class DotsAndBoxesGame {
-  DotsAndBoxesGame({required this.size, int firstPlayer = 0})
-      : assert(size >= 2, 'a board needs at least 2 boxes a side'),
+  DotsAndBoxesGame({
+    required this.cols,
+    required this.rows,
+    this.playerCount = 2,
+    int firstPlayer = 0,
+  })  : assert(cols >= 2 && rows >= 2, 'a board needs at least 2 boxes a side'),
+        assert(playerCount >= 2 && playerCount <= 4),
+        assert(firstPlayer >= 0 && firstPlayer < playerCount),
         _current = firstPlayer,
-        // (size + 1) rows of `size` horizontal edges, and the mirror for vertical.
-        _horizontal = List.generate(size + 1, (_) => List.filled(size, false)),
-        _vertical = List.generate(size, (_) => List.filled(size + 1, false)),
-        _owners = List.generate(size, (_) => List.filled(size, -1));
+        // (rows + 1) rows of `cols` horizontal edges, and the mirror for vertical.
+        _horizontal = List.generate(rows + 1, (_) => List.filled(cols, false)),
+        _vertical = List.generate(rows, (_) => List.filled(cols + 1, false)),
+        _owners = List.generate(rows, (_) => List.filled(cols, -1));
 
-  /// Boxes per side. 4, 5 or 6 in the shipped setup.
-  final int size;
+  /// Boxes across.
+  final int cols;
+
+  /// Boxes down.
+  final int rows;
+
+  /// Seats at the table, 2–4. Turn order is seat order.
+  final int playerCount;
 
   final List<List<bool>> _horizontal;
   final List<List<bool>> _vertical;
   final List<List<int>> _owners;
   int _current;
 
-  /// Whose turn it is: 0 or 1.
+  /// Whose turn it is, as a seat index.
   int get currentPlayer => _current;
 
   /// Box owner at `(row, col)`, or -1 while unclaimed.
@@ -71,17 +90,33 @@ class DotsAndBoxesGame {
     return n;
   }
 
-  int get totalBoxes => size * size;
+  int get totalBoxes => cols * rows;
 
-  int get claimedBoxes => scoreOf(0) + scoreOf(1);
+  int get claimedBoxes {
+    var n = 0;
+    for (final row in _owners) {
+      for (final o in row) {
+        if (o != -1) n++;
+      }
+    }
+    return n;
+  }
 
   bool get isFinished => claimedBoxes == totalBoxes;
 
-  /// The winner, or null on a draw. Only meaningful once [isFinished].
+  /// Every seat on the top score. One entry is a winner; more than one is a
+  /// tie, which is declared as a tie rather than broken. Only meaningful once
+  /// [isFinished].
+  List<int> get leaders {
+    final scores = [for (var p = 0; p < playerCount; p++) scoreOf(p)];
+    final top = scores.reduce((a, b) => a > b ? a : b);
+    return [for (var p = 0; p < playerCount; p++) if (scores[p] == top) p];
+  }
+
+  /// The sole winner, or null when the game is tied.
   int? get winner {
-    final a = scoreOf(0), b = scoreOf(1);
-    if (a == b) return null;
-    return a > b ? 0 : 1;
+    final top = leaders;
+    return top.length == 1 ? top.first : null;
   }
 
   bool isDrawn(BoxEdge edge) => switch (edge.kind) {
@@ -94,19 +129,19 @@ class DotsAndBoxesGame {
     if (edge.row < 0 || edge.col < 0) return false;
     switch (edge.kind) {
       case EdgeKind.horizontal:
-        if (edge.row > size || edge.col >= size) return false;
+        if (edge.row > rows || edge.col >= cols) return false;
       case EdgeKind.vertical:
-        if (edge.row >= size || edge.col > size) return false;
+        if (edge.row >= rows || edge.col > cols) return false;
     }
     return !isDrawn(edge);
   }
 
   List<BoxEdge> get legalMoves => [
-        for (var r = 0; r <= size; r++)
-          for (var c = 0; c < size; c++)
+        for (var r = 0; r <= rows; r++)
+          for (var c = 0; c < cols; c++)
             if (!_horizontal[r][c]) BoxEdge(EdgeKind.horizontal, r, c),
-        for (var r = 0; r < size; r++)
-          for (var c = 0; c <= size; c++)
+        for (var r = 0; r < rows; r++)
+          for (var c = 0; c <= cols; c++)
             if (!_vertical[r][c]) BoxEdge(EdgeKind.vertical, r, c),
       ];
 
@@ -131,8 +166,8 @@ class DotsAndBoxesGame {
     }
 
     final finished = isFinished;
-    // Closing a box grants another turn; otherwise play passes.
-    if (claimed == 0) _current = 1 - _current;
+    // Closing a box grants another turn; otherwise play passes to the next seat.
+    if (claimed == 0) _current = (_current + 1) % playerCount;
     return MoveResult(claimed: claimed, extraTurn: claimed > 0, finished: finished);
   }
 
@@ -140,10 +175,10 @@ class DotsAndBoxesGame {
     switch (edge.kind) {
       case EdgeKind.horizontal:
         if (edge.row > 0) yield (edge.row - 1, edge.col);
-        if (edge.row < size) yield (edge.row, edge.col);
+        if (edge.row < rows) yield (edge.row, edge.col);
       case EdgeKind.vertical:
         if (edge.col > 0) yield (edge.row, edge.col - 1);
-        if (edge.col < size) yield (edge.row, edge.col);
+        if (edge.col < cols) yield (edge.row, edge.col);
     }
   }
 
@@ -153,4 +188,44 @@ class DotsAndBoxesGame {
   /// Snapshot of the drawn edges, for the painter.
   bool horizontalAt(int r, int c) => _horizontal[r][c];
   bool verticalAt(int r, int c) => _vertical[r][c];
+
+  // ── Snapshots (undo) ──────────────────────────────────────────────────────
+
+  /// One step back is one line, plus any boxes it closed and the turn it took.
+  /// Ownership and the turn cannot be inferred from the line alone, so undo
+  /// restores a snapshot.
+  DotsSnapshot snapshot() => DotsSnapshot(
+        horizontal: [for (final r in _horizontal) List<bool>.from(r)],
+        vertical: [for (final r in _vertical) List<bool>.from(r)],
+        owners: [for (final r in _owners) List<int>.from(r)],
+        current: _current,
+      );
+
+  void restore(DotsSnapshot s) {
+    for (var r = 0; r < _horizontal.length; r++) {
+      _horizontal[r].setAll(0, s.horizontal[r]);
+    }
+    for (var r = 0; r < _vertical.length; r++) {
+      _vertical[r].setAll(0, s.vertical[r]);
+    }
+    for (var r = 0; r < _owners.length; r++) {
+      _owners[r].setAll(0, s.owners[r]);
+    }
+    _current = s.current;
+  }
+}
+
+/// One restorable Dots & Boxes position.
+class DotsSnapshot {
+  const DotsSnapshot({
+    required this.horizontal,
+    required this.vertical,
+    required this.owners,
+    required this.current,
+  });
+
+  final List<List<bool>> horizontal;
+  final List<List<bool>> vertical;
+  final List<List<int>> owners;
+  final int current;
 }

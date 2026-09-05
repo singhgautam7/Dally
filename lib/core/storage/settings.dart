@@ -15,8 +15,25 @@ enum DpadPosition { left, centre, right }
 @freezed
 abstract class Settings with _$Settings {
   const factory Settings({
-    @Default(1) int schemaVersion,
+    @Default(2) int schemaVersion,
+
+    /// **Legacy.** One stored `themeId` became the three theme keys below in
+    /// v4. Still written for one release so a downgrade is survivable, and
+    /// still the migration source on first launch after the update — but never
+    /// read to build a palette.
     @Default('ink') String paletteId,
+
+    /// Theme axis 1 — `'light'` or `'dark'`.
+    @Default('dark') String themeMode,
+
+    /// Theme axis 2 — one of the ten accent identities.
+    @Default('azure') String accentId,
+
+    /// Theme axis 3 — true black background. Dark only; ignored in Light.
+    @Default(false) bool amoled,
+
+    /// Accessibility: promotes the two quiet text weights a step.
+    @Default(false) bool highContrastText,
     @Default(true) bool hapticsEnabled,
     @Default(false) bool soundEnabled,
     @Default(OnScreenControls.dpad) OnScreenControls onScreenControls,

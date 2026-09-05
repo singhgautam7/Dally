@@ -12,7 +12,7 @@ import 'snake_painter.dart';
 /// The preview handed to the shared [showStylePicker] — the existing snake and
 /// food artwork, unchanged. The picker shell is now
 /// `core/widgets/style_picker_sheet.dart`, shared with every other game.
-Widget snakeStylePreview(BuildContext context, String styleId) {
+Widget snakeStylePreview(BuildContext context, String groupId, String styleId) {
   final t = context.tokens;
   return SizedBox(
     width: 62,

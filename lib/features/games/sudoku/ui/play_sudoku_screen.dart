@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/storage/game_session.dart';
 import '../../../../core/game/session_recorder.dart';
+import '../../../../core/game/undo.dart';
 import '../../../../core/game/how_to_launcher.dart';
 import '../../../../core/app_providers.dart';
 import '../../../../core/services/haptics.dart';
@@ -52,7 +53,8 @@ class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
   List<int> _solution = List.filled(81, 0);
   List<int> _entries = List.filled(81, 0);
   List<List<int>> _pencils = List.generate(81, (_) => <int>[]);
-  final List<_Snapshot> _undo = [];
+  /// The shared bounded stack: one digit or one note per step, five deep.
+  final _undo = UndoStack<_Snapshot>();
 
   int _selected = -1;
   bool _pencil = false;
@@ -88,7 +90,8 @@ class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
     _loading = true;
     _solved = false;
     _selected = -1;
-    _undo.clear();
+    // A whole new puzzle: history gone and the record-integrity flag with it.
+    _undo.reset();
     _clockBase = 0;
     _startedAt = DateTime.now();
     resetClock();
@@ -145,11 +148,10 @@ class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
   }
 
   void _pushUndo() {
-    _undo.add(_Snapshot(
+    _undo.push(_Snapshot(
       List<int>.from(_entries),
       _pencils.map((e) => List<int>.from(e)).toList(),
     ));
-    if (_undo.length > 60) _undo.removeAt(0);
   }
 
   void _startClockOnce() {
@@ -192,8 +194,9 @@ class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
   }
 
   void _undoLast() {
-    if (_undo.isEmpty) return;
-    final s = _undo.removeLast();
+    final s = _undo.pop();
+    if (s == null) return;
+    Haptics.light(ref);
     setState(() {
       _entries = s.entries;
       _pencils = s.pencils;
@@ -207,12 +210,18 @@ class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
       if (_value(i) != _solution[i]) return;
     }
     stopClock();
+    // A finished board cannot be un-finished.
+    _undo.clear();
     setState(() => _solved = true);
     play(MotionPreset.pop);
     Haptics.medium(ref);
     final stats = ref.read(statsRepositoryProvider);
-    stats.recordBest('${widget.moduleId}.bestTime.${widget.config.difficulty.name}',
-        _displaySeconds.toDouble(), higherIsBetter: false);
+    // A solve that used undo still counts as a solve; it does not set a best
+    // time (`.agents/CLAUDE.md` §7.3).
+    if (!_undo.used) {
+      stats.recordBest('${widget.moduleId}.bestTime.${widget.config.difficulty.name}',
+          _displaySeconds.toDouble(), higherIsBetter: false);
+    }
     stats.increment('${widget.moduleId}.solved');
     recordSession(
       ref,
@@ -222,6 +231,7 @@ class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
       outcome: SessionOutcome.solved,
       configLabel: widget.config.difficulty.label,
       score: _displaySeconds,
+      usedUndo: _undo.used,
     );
     SudokuSave.clear(ref.read(saveRepositoryProvider));
   }
@@ -268,7 +278,7 @@ class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
     setState(() {
       _entries = List.filled(81, 0);
       _pencils = List.generate(81, (_) => <int>[]);
-      _undo.clear();
+      _undo.reset();
       _solved = false;
       _startedAt = DateTime.now();
       _selected = -1;
@@ -296,6 +306,8 @@ class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
     }
     return GameScaffold(
       onOverflow: _openPause,
+      onUndo: _undoLast,
+      canUndo: _undo.canUndo && !_solved,
       ended: _solved,
       progressSaved: true,
       statusBar: Center(
@@ -337,8 +349,6 @@ class _PlaySudokuScreenState extends ConsumerState<PlaySudokuScreen>
                 onErase: _erase,
                 pencilOn: _pencil,
                 onTogglePencil: () => setState(() => _pencil = !_pencil),
-                onUndo: _undoLast,
-                canUndo: _undo.isNotEmpty,
               ),
       ),
     );

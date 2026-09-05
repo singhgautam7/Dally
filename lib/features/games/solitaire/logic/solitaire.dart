@@ -177,6 +177,44 @@ class Solitaire {
     return true;
   }
 
+  // ── Snapshots (undo) ──────────────────────────────────────────────────────
+
+  /// A complete, independent copy of the game's mutable state.
+  ///
+  /// Solitaire's undo has to put a card back **where it came from, flip
+  /// included** — which the move itself cannot invert, because uncovering a
+  /// column turns a card face up and that is not information a reverse move
+  /// carries. A snapshot is the honest way to restore it.
+  SolitaireSnapshot snapshot() => SolitaireSnapshot(
+        tableau: [for (final c in tableau) List<PlayingCard>.from(c)],
+        faceUpFrom: List<int>.from(faceUpFrom),
+        foundations: [for (final f in foundations) List<PlayingCard>.from(f)],
+        stock: List<PlayingCard>.from(stock),
+        waste: List<PlayingCard>.from(waste),
+        moves: moves,
+      );
+
+  void restore(SolitaireSnapshot s) {
+    for (var c = 0; c < columns; c++) {
+      tableau[c]
+        ..clear()
+        ..addAll(s.tableau[c]);
+      faceUpFrom[c] = s.faceUpFrom[c];
+    }
+    for (var f = 0; f < foundations.length; f++) {
+      foundations[f]
+        ..clear()
+        ..addAll(s.foundations[f]);
+    }
+    stock
+      ..clear()
+      ..addAll(s.stock);
+    waste
+      ..clear()
+      ..addAll(s.waste);
+    moves = s.moves;
+  }
+
   /// The foundation index [card] belongs on — one per suit, always in place.
   int foundationFor(PlayingCard card) => card.suit.index;
 
@@ -216,4 +254,25 @@ class Solitaire {
     }
     return played;
   }
+}
+
+/// One restorable Solitaire position. Lists are copied on capture, so the live
+/// game mutating afterwards can never reach back into a snapshot.
+@immutable
+class SolitaireSnapshot {
+  const SolitaireSnapshot({
+    required this.tableau,
+    required this.faceUpFrom,
+    required this.foundations,
+    required this.stock,
+    required this.waste,
+    required this.moves,
+  });
+
+  final List<List<PlayingCard>> tableau;
+  final List<int> faceUpFrom;
+  final List<List<PlayingCard>> foundations;
+  final List<PlayingCard> stock;
+  final List<PlayingCard> waste;
+  final int moves;
 }

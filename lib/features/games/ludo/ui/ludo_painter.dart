@@ -20,6 +20,7 @@ class LudoPainter extends CustomPainter {
     required this.border,
     required this.surface,
     required this.surfaceAlt,
+    required this.lightMode,
     required this.accent,
     required this.movable,
     required this.animating,
@@ -33,6 +34,9 @@ class LudoPainter extends CustomPainter {
   final LudoGame game;
   final List<PlayerIdentity> identities;
   final Color border;
+  /// The seat hairline is mandatory in Light — see [identityOutline].
+  final bool lightMode;
+
   final Color surface;
   final Color surfaceAlt;
   final Color accent;
@@ -239,6 +243,7 @@ class LudoPainter extends CustomPainter {
       ringWidth: _cell * 0.06 * scale,
       style: tokenStyle,
       knockout: surface,
+      lightMode: lightMode,
     );
   }
 

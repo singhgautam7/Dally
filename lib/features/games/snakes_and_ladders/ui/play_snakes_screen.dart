@@ -195,7 +195,7 @@ class _PlaySnakesScreenState extends ConsumerState<PlaySnakesScreen>
       extraRows: [
         ?stylePickerRow(context, ref,
             module: _module,
-            previewBuilder: (context, id) => TokenStylePreview(
+            previewBuilder: (context, _, id) => TokenStylePreview(
                 styleId: id, seats: widget.config.playerCount)),
       ],
     );
@@ -247,6 +247,7 @@ class _PlaySnakesScreenState extends ConsumerState<PlaySnakesScreen>
             dimension: side,
             child: CustomPaint(
               painter: SnakesPainter(
+                lightMode: !t.isDark,
                 game: _game,
                 identities: _seats,
                 ink: t.textPrimary,
