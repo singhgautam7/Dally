@@ -104,9 +104,11 @@ class _GameScaffoldState extends ConsumerState<GameScaffold> {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              if (widget.onUndo != null)
+              if (widget.onUndo != null) ...[
                 UndoButton(onTap: widget.onUndo!, enabled: widget.canUndo),
-              OverflowButton(onTap: _openPause, semanticLabel: 'Pause'),
+                const Gap.h(Insets.s2),
+              ],
+              OverflowButton(onTap: _openPause),
             ],
           ),
           const Gap(Insets.s1 + 2),

@@ -84,71 +84,109 @@ class PrimaryPill extends StatelessWidget {
 
 enum _PillFill { primary, secondary, danger }
 
-/// The three-dot button that raises a game's pause sheet.
+/// The round control in a game's top-right chrome: a 40px tap target holding a
+/// 34px hairline circle with one icon in it.
 ///
-/// It sits in the same corner of every game shell (`GameScaffold`, Mental Math,
-/// Quick Play, Tiny Arcade, Undercover), so it is one widget rather than five copies
-/// — the fifth of which had lost its semantics label.
-/// The shared undo control: 34px, in the game chrome's top-right immediately
-/// left of the overflow, at the same ghosted weight — so a player who learns it
-/// in Solitaire finds it in Sudoku without looking.
-///
-/// Three states, and no fourth: available (icon in the text colour, hairline
-/// ring), nothing to undo (the whole control dimmed, not tappable, **never
-/// hidden**), and pressed (a brief accent tint). It never carries a number — a
-/// count would make the cap read as a resource to spend, and disabled-when-empty
-/// says the same thing with nothing to read.
-///
-/// A game that does not support undo passes no callback and the control is not
-/// built at all: a missing control is quieter than a permanently dead one.
-class UndoButton extends StatefulWidget {
-  const UndoButton({super.key, required this.onTap, required this.enabled});
+/// Undo and the overflow are the two of them, and they are one widget because
+/// they sit side by side — two different shapes in the same corner reads as an
+/// accident rather than a pair. Both share the press behaviour too: a brief
+/// accent tint on the ring and the icon, then straight back.
+class ChromeButton extends StatefulWidget {
+  const ChromeButton({
+    super.key,
+    required this.icon,
+    required this.onTap,
+    required this.semanticLabel,
+    this.enabled = true,
+    this.iconSize = 17,
+    this.muted = false,
+    this.tooltip,
+  });
 
+  final IconData icon;
   final VoidCallback onTap;
+  final String semanticLabel;
 
-  /// False when the stack is empty — and, on a two-seat board, while it is not
-  /// your turn: the last move belongs to the other seat.
+  /// Shown on a long press. Defaults to [semanticLabel], so the word a screen
+  /// reader announces and the word a sighted player uncovers are the same one —
+  /// an icon-only control should not have two names.
+  final String? tooltip;
+
+  /// False dims the whole control and stops it taking taps. It is never
+  /// hidden — a missing control moves; a dim one just says "not now".
   final bool enabled;
 
+  final double iconSize;
+
+  /// Draws the icon in [DallyTokens.textMuted] rather than the text colour.
+  /// The overflow is quieter than undo: it is always available, so it does not
+  /// need to advertise itself.
+  final bool muted;
+
   @override
-  State<UndoButton> createState() => _UndoButtonState();
+  State<ChromeButton> createState() => _ChromeButtonState();
 }
 
-class _UndoButtonState extends State<UndoButton> {
+class _ChromeButtonState extends State<ChromeButton> {
   bool _pressed = false;
+
+  bool get _active => _pressed && widget.enabled;
 
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
-    final tint = _pressed && widget.enabled ? t.accent : t.textPrimary;
     return Semantics(
       button: true,
       enabled: widget.enabled,
-      label: 'Undo',
-      child: Opacity(
-        opacity: widget.enabled ? 1 : 0.38,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: widget.enabled ? (_) => setState(() => _pressed = true) : null,
-          onTapCancel: widget.enabled ? () => setState(() => _pressed = false) : null,
-          onTap: widget.enabled
-              ? () {
-                  setState(() => _pressed = false);
-                  widget.onTap();
-                }
-              : null,
-          child: SizedBox(
-            width: 40,
-            height: 40,
-            child: Center(
-              child: Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: _pressed && widget.enabled ? t.accent : t.border),
+      label: widget.semanticLabel,
+      child: Tooltip(
+        message: widget.tooltip ?? widget.semanticLabel,
+        // The Semantics above already names the control; letting the tooltip
+        // add its own would announce it twice.
+        excludeFromSemantics: true,
+        decoration: BoxDecoration(
+          color: t.surfaceAlt,
+          borderRadius: Radii.cellBR,
+          border: Border.all(color: t.border),
+        ),
+        textStyle: DallyType.body.copyWith(fontSize: 12, color: t.textPrimary),
+        child: Opacity(
+          opacity: widget.enabled ? 1 : 0.38,
+          // The press tint rides on a raw [Listener] rather than the gesture
+          // detector's `onTapDown`. With the tooltip's long-press recogniser in
+          // the arena, `onTapDown` is held back until the arena resolves — which
+          // is pointer-up — so the tint arrived after the press had ended.
+          // Pointer events are not arena-gated, so this lands on contact.
+          child: Listener(
+            onPointerDown:
+                widget.enabled ? (_) => setState(() => _pressed = true) : null,
+            onPointerUp:
+                widget.enabled ? (_) => setState(() => _pressed = false) : null,
+            onPointerCancel:
+                widget.enabled ? (_) => setState(() => _pressed = false) : null,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: widget.enabled ? widget.onTap : null,
+              child: SizedBox(
+                width: 40,
+                height: 40,
+                child: Center(
+                  child: Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: _active ? t.accent : t.border),
+                    ),
+                    child: Icon(
+                      widget.icon,
+                      size: widget.iconSize,
+                      color: _active
+                          ? t.accent
+                          : (widget.muted ? t.textMuted : t.textPrimary),
+                    ),
+                  ),
                 ),
-                child: Icon(Icons.undo_rounded, size: 17, color: tint),
               ),
             ),
           ),
@@ -158,25 +196,58 @@ class _UndoButtonState extends State<UndoButton> {
   }
 }
 
+/// The shared undo control: in the game chrome's top-right, immediately left of
+/// the overflow — so a player who learns it in Solitaire finds it in Sudoku
+/// without looking.
+///
+/// Three states, and no fourth: available (icon in the text colour, hairline
+/// ring), nothing to undo (the whole control dimmed, not tappable, **never
+/// hidden**), and pressed (a brief accent tint). It never carries a number — a
+/// count would make the cap read as a resource to spend, and disabled-when-empty
+/// says the same thing with nothing to read.
+///
+/// A game that does not support undo passes no callback and the control is not
+/// built at all: a missing control is quieter than a permanently dead one.
+class UndoButton extends StatelessWidget {
+  const UndoButton({super.key, required this.onTap, required this.enabled});
+
+  final VoidCallback onTap;
+
+  /// False when the stack is empty — and, on a two-seat board, while it is not
+  /// your turn: the last move belongs to the other seat.
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) => ChromeButton(
+        icon: Icons.undo_rounded,
+        onTap: onTap,
+        enabled: enabled,
+        semanticLabel: 'Undo',
+        // A dimmed control says "not now" but not why; the long press does.
+        tooltip: enabled ? 'Undo' : 'Undo: disabled',
+      );
+}
+
+/// The three-dot button that raises a game's pause sheet.
+///
+/// It sits in the same corner of every game shell (`GameScaffold`, Mental Math,
+/// Quick Play, Tiny Arcade, Undercover), so it is one widget rather than five
+/// copies — the fifth of which had lost its semantics label.
 class OverflowButton extends StatelessWidget {
-  const OverflowButton({super.key, required this.onTap, this.semanticLabel = 'More'});
+  /// Every shell opens the same `showPauseSheet`, so they all call it the same
+  /// thing. It used to default to "More", which left four of the five shells
+  /// naming the button differently from the sixth.
+  const OverflowButton({super.key, required this.onTap, this.semanticLabel = 'Pause'});
 
   final VoidCallback onTap;
   final String semanticLabel;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-        button: true,
-        label: semanticLabel,
-        child: InkResponse(
-          onTap: onTap,
-          radius: 24,
-          child: SizedBox(
-            width: 40,
-            height: 40,
-            child: Icon(Icons.more_vert_rounded,
-                color: context.tokens.textFaint, size: 20),
-          ),
-        ),
+  Widget build(BuildContext context) => ChromeButton(
+        icon: Icons.more_vert_rounded,
+        onTap: onTap,
+        semanticLabel: semanticLabel,
+        iconSize: 18,
+        muted: true,
       );
 }
