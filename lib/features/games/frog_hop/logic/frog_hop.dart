@@ -40,12 +40,29 @@ class FrogMove {
 /// of cells, so the geometry is one index and a rotation to landscape is a
 /// rendering decision rather than a rules one.
 class FrogHopGame {
-  FrogHopGame({required this.perSide, FrogSide first = FrogSide.bottom})
-      : assert(perSide >= 1),
+  FrogHopGame({
+    required this.perSide,
+    this.gaps = 1,
+    FrogSide first = FrogSide.bottom,
+  })  : assert(perSide >= 1),
+        assert(gaps >= 1),
         _turn = first,
-        _cells = List<FrogSide?>.filled(perSide * 2 + 1, null) {
+        _cells = List<FrogSide?>.filled(perSide * 2 + gaps, null) {
     _deal();
   }
+
+  /// Empty cells between the two blocks at the deal.
+  ///
+  /// The **puzzle** uses one, which is what makes `n² + 2n` the minimum. The
+  /// **race** uses three, and that is not decoration: on a one-gap lane a race
+  /// is unwinnable and usually one-sided. Walking the whole reachable state
+  /// space (`test/games/frog_hop_test.dart`) finds *zero* winning positions at
+  /// one or two gaps for every lane size, because filling your own home there
+  /// forces the other side into theirs at the same instant — and worse, a
+  /// single move can wall the other side out of the lane for the rest of the
+  /// game. Three gaps is the first width at which one side can finish before
+  /// the other, and at which both sides always have something to play.
+  final int gaps;
 
   /// Pieces a side. 3 is the default; 4 and 5 are the longer games.
   final int perSide;
@@ -73,7 +90,6 @@ class FrogHopGame {
       _cells[i] = FrogSide.bottom;
       _cells[length - 1 - i] = FrogSide.top;
     }
-    _cells[perSide] = null;
   }
 
   /// Bottom travels toward the high end, top toward the low end. Nothing ever
@@ -125,8 +141,8 @@ class FrogHopGame {
       out.add(FrogMove(from: index, to: ahead, kind: FrogMoveKind.step));
     }
     final beyond = index + 2 * d;
-    // A jump needs exactly one occupied neighbour — of either colour — and an
-    // empty cell the other side of it.
+    // A jump needs exactly one occupied neighbour — **of the other side** — and
+    // an empty cell beyond it.
     if (beyond >= 0 &&
         beyond < length &&
         _cells[ahead] != null &&

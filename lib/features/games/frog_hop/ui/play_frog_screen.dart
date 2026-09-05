@@ -90,7 +90,11 @@ class _PlayFrogScreenState extends ConsumerState<PlayFrogScreen>
       _strip = 'Swap the two sides';
     } else {
       _puzzle = null;
-      _game = FrogHopGame(perSide: widget.config.perSide, first: widget.config.first);
+      _game = FrogHopGame(
+        perSide: widget.config.perSide,
+        gaps: widget.config.gaps,
+        first: widget.config.first,
+      );
       _strip = "${widget.config.nameOf(_game.turn)}'s turn — tap a piece";
     }
     _selected = null;

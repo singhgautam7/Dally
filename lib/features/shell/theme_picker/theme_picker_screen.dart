@@ -1,25 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../core/routing/routes.dart';
 import '../../../core/services/haptics.dart';
-import '../../../core/theme/accents.dart';
 import '../../../core/theme/dally_tokens.dart';
 import '../../../core/theme/palettes.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/type_scale.dart';
-import '../../../core/widgets/dally_toggle.dart';
 import '../../../core/widgets/generic_palette_preview.dart';
-import '../../../core/widgets/segmented_selector.dart';
 import '../../../core/widgets/shell_header.dart';
 
-/// Theme — one pushed screen, two halves.
+/// Theme — the presets half.
 ///
-/// Presets first, because most people want a name and not a construction.
-/// Custom sits below with the three controls and the same preview, live.
-/// Picking a preset fills the custom controls in; touching a control moves the
-/// selection to Custom. Nothing is nested and nothing is behind a dialog, and
-/// everything applies as you tap — there is no save button.
+/// Presets first, because most people want a name and not a construction, and
+/// the eight cards are the ones already shipped: a single generic palette
+/// preview each, never game content. Under them, one row leads to the custom
+/// builder (`Dally Theme System.dc.html` §21g).
+///
+/// A triple that matches a preset marks that card CURRENT; anything else marks
+/// none of them, because the app is not showing any of them.
 class ThemePickerScreen extends ConsumerWidget {
   const ThemePickerScreen({super.key});
 
@@ -28,14 +29,7 @@ class ThemePickerScreen extends ConsumerWidget {
     final t = context.tokens;
     final triple = ref.watch(themeTripleProvider);
     final controller = ref.read(settingsControllerProvider.notifier);
-    final preset = triple.preset;
-
-    final live = DallyPalettes.palette(
-      mode: triple.mode,
-      accentId: triple.accentId,
-      amoled: triple.amoled,
-      highContrastText: triple.highContrastText,
-    );
+    final current = triple.preset;
 
     return Scaffold(
       backgroundColor: t.bg,
@@ -55,104 +49,27 @@ class ThemePickerScreen extends ConsumerWidget {
                     const Gap(Insets.s2),
                     _PresetGrid(
                       presets: DallyPalettes.presets,
-                      currentId: preset?.id,
+                      currentId: current?.id,
                       highContrastText: triple.highContrastText,
                       onSelect: (p) {
                         Haptics.selection(ref);
                         controller.selectPreset(p);
                       },
                     ),
-                    const Gap(Insets.s6),
-
-                    // ── Or build one ──────────────────────────────────────
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        _GroupLabel(text: 'Custom', tokens: t),
-                        Text(preset == null ? 'Matches no preset' : 'Showing ${preset.name}',
-                            style: DallyType.body.copyWith(fontSize: 11, color: t.textFaint)),
-                      ],
-                    ),
-                    const Gap(Insets.s2),
-                    // The same generic preview the preset cards use, at full
-                    // width. It shows no game content, so a palette is judged
-                    // as a palette. It updates on the tap, in place.
-                    SizedBox(
-                      height: 168,
-                      child: GenericPalettePreview(palette: live, showLabel: false),
-                    ),
+                    const Gap(Insets.s5),
+                    _OrBuildOne(tokens: t),
                     const Gap(Insets.s4),
-
-                    _ControlLabel(text: 'Mode', tokens: t),
-                    const Gap(Insets.s2),
-                    SegmentedSelector<DallyMode>(
-                      options: const [DallyMode.dark, DallyMode.light],
-                      selected: triple.mode,
-                      labelOf: (m) => m.label,
-                      onSelect: (m) {
+                    _CustomRow(
+                      // No preset matches the live triple, so *this* is what
+                      // the app is showing — and the row says so, the same way
+                      // a preset card does.
+                      selected: current == null,
+                      onTap: () {
                         Haptics.selection(ref);
-                        controller.setThemeMode(m);
+                        context.push(Routes.themeCustom);
                       },
                     ),
                     const Gap(Insets.s5),
-
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        _ControlLabel(text: 'Accent', tokens: t),
-                        Text(accentById(triple.accentId).name,
-                            style: DallyType.body.copyWith(fontSize: 12, color: t.textMuted)),
-                      ],
-                    ),
-                    const Gap(Insets.s2),
-                    _AccentGrid(
-                      mode: triple.mode,
-                      selectedId: triple.accentId,
-                      onSelect: (id) {
-                        Haptics.selection(ref);
-                        controller.setAccent(id);
-                      },
-                    ),
-                    const Gap(Insets.s5),
-
-                    // AMOLED is Dark-only. Greyed out in Light with the reason
-                    // stated, never hidden.
-                    Opacity(
-                      opacity: triple.mode == DallyMode.dark ? 1 : 0.38,
-                      child: IgnorePointer(
-                        ignoring: triple.mode != DallyMode.dark,
-                        child: DallyToggle(
-                          title: 'AMOLED black',
-                          subtitle: triple.mode == DallyMode.dark
-                              ? 'True black background'
-                              : 'Dark mode only',
-                          value: triple.amoledActive,
-                          onChanged: (v) {
-                            Haptics.selection(ref);
-                            controller.setAmoled(v);
-                          },
-                        ),
-                      ),
-                    ),
-                    const Gap(Insets.s4),
-                    DallyToggle(
-                      title: 'High-contrast text',
-                      subtitle: 'Lifts the quietest labels a step',
-                      value: triple.highContrastText,
-                      onChanged: (v) {
-                        Haptics.selection(ref);
-                        controller.setHighContrastText(v);
-                      },
-                    ),
-                    const Gap(Insets.s5),
-                    Text(
-                      'APPLIES AS YOU TAP · NO SAVE BUTTON',
-                      style: DallyType.label
-                          .copyWith(fontSize: 10, letterSpacing: 1.4, color: t.textFaint),
-                    ),
-                    const Gap(Insets.s3),
                     Text(
                       'Every board reads the same eleven tokens, so a theme swap never moves a pixel. Switch mid-game from the pause sheet.',
                       style: DallyType.body.copyWith(fontSize: 12, color: t.textFaint, height: 1.6),
@@ -161,6 +78,101 @@ class ThemePickerScreen extends ConsumerWidget {
                   ],
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The hairline divider between the two halves: a rule either side of one mono
+/// label, so the custom row reads as an alternative rather than a leftover.
+class _OrBuildOne extends StatelessWidget {
+  const _OrBuildOne({required this.tokens});
+  final DallyTokens tokens;
+
+  @override
+  Widget build(BuildContext context) => Row(
+        children: [
+          Expanded(child: Divider(color: tokens.border, height: 1, thickness: 1)),
+          const Gap.h(Insets.s3),
+          Text('OR BUILD ONE',
+              style: DallyType.label
+                  .copyWith(fontSize: 10, letterSpacing: 1.4, color: tokens.textFaint)),
+          const Gap.h(Insets.s3),
+          Expanded(child: Divider(color: tokens.border, height: 1, thickness: 1)),
+        ],
+      );
+}
+
+/// The one way into the custom builder. Nothing is nested inside it, and
+/// nothing behind it is a dialog — it is a pushed screen like every other.
+///
+/// When the live triple matches no preset, this row *is* the current theme, so
+/// it carries the same selected treatment the preset cards do — an accent
+/// outline and a tick — rather than leaving the screen with nothing marked.
+class _CustomRow extends StatelessWidget {
+  const _CustomRow({required this.selected, required this.onTap});
+
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: 'Custom',
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          decoration: BoxDecoration(
+            color: selected ? t.accent.withValues(alpha: 0.10) : t.surface,
+            borderRadius: Radii.containerBR,
+            border: Border.all(
+                color: selected ? t.accent : t.border, width: selected ? 2 : 1),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Text('Custom',
+                            style: DallyType.body.copyWith(
+                              fontSize: 15,
+                              fontWeight:
+                                  selected ? FontWeight.w600 : FontWeight.w400,
+                              color: t.textPrimary,
+                            )),
+                        if (selected) ...[
+                          const Gap.h(Insets.s2),
+                          Text('CURRENT',
+                              style: DallyType.monoSm.copyWith(
+                                fontSize: 8,
+                                letterSpacing: 0.9,
+                                color: t.accent,
+                              )),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text('Mode, accent and AMOLED',
+                        style: DallyType.body.copyWith(fontSize: 12, color: t.textFaint)),
+                  ],
+                ),
+              ),
+              if (selected) ...[
+                Icon(Icons.check_circle_rounded, size: 20, color: t.accent),
+                const Gap.h(Insets.s2),
+              ],
+              Icon(Icons.chevron_right_rounded, size: 18, color: t.textFaint),
             ],
           ),
         ),
@@ -181,19 +193,6 @@ class _GroupLabel extends StatelessWidget {
       );
 }
 
-class _ControlLabel extends StatelessWidget {
-  const _ControlLabel({required this.text, required this.tokens});
-  final String text;
-  final DallyTokens tokens;
-
-  @override
-  Widget build(BuildContext context) => Text(
-        text,
-        style: DallyType.body.copyWith(
-            fontSize: 13, fontWeight: FontWeight.w600, color: tokens.textMuted),
-      );
-}
-
 class _PresetGrid extends StatelessWidget {
   const _PresetGrid({
     required this.presets,
@@ -203,6 +202,9 @@ class _PresetGrid extends StatelessWidget {
   });
 
   final List<ThemePreset> presets;
+
+  /// Null when the live triple matches no preset — in which case **no card is
+  /// marked current**, because none of them is what the app is showing.
   final String? currentId;
   final bool highContrastText;
   final ValueChanged<ThemePreset> onSelect;
@@ -222,77 +224,17 @@ class _PresetGrid extends StatelessWidget {
       itemCount: presets.length,
       itemBuilder: (context, i) {
         final p = presets[i];
-        final palette =
-            DallyPalettes.ofPreset(p, highContrastText: highContrastText);
-        return Semantics(
-          button: true,
-          selected: p.id == currentId,
-          label: p.name,
-          child: GestureDetector(
-            onTap: () => onSelect(p),
-            child: GenericPalettePreview(palette: palette, selected: p.id == currentId),
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// Ten accents as two rows of five at a 44px target — a deliberate grid rather
-/// than a ragged wrap, and few enough that every hue is still nameable. Each
-/// swatch shows the value the accent resolves to *in the chosen mode*, so what
-/// you tap is what you get.
-class _AccentGrid extends StatelessWidget {
-  const _AccentGrid({
-    required this.mode,
-    required this.selectedId,
-    required this.onSelect,
-  });
-
-  final DallyMode mode;
-  final String selectedId;
-  final ValueChanged<String> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.tokens;
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: EdgeInsets.zero,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 5,
-        mainAxisSpacing: Insets.s2,
-        crossAxisSpacing: Insets.s2,
-        mainAxisExtent: 44,
-      ),
-      itemCount: kDallyAccents.length,
-      itemBuilder: (context, i) {
-        final a = kDallyAccents[i];
-        final selected = a.id == selectedId;
+        final selected = currentId != null && p.id == currentId;
         return Semantics(
           button: true,
           selected: selected,
-          label: a.name,
+          label: p.name,
           child: GestureDetector(
-            onTap: () => onSelect(a.id),
-            child: Container(
-              decoration: BoxDecoration(
-                color: t.surfaceAlt,
-                borderRadius: Radii.cellBR,
-                border: Border.all(
-                  color: selected ? a.resolve(mode) : t.border,
-                  width: selected ? 2 : 1,
-                ),
-              ),
-              child: Center(
-                child: Container(
-                  width: selected ? 20 : 18,
-                  height: selected ? 20 : 18,
-                  decoration:
-                      BoxDecoration(color: a.resolve(mode), shape: BoxShape.circle),
-                ),
-              ),
+            onTap: () => onSelect(p),
+            child: GenericPalettePreview(
+              palette: DallyPalettes.ofPreset(p, highContrastText: highContrastText),
+              selected: selected,
+              markCurrent: true,
             ),
           ),
         );

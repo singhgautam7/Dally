@@ -72,11 +72,14 @@ class _SetupFrogScreenState extends ConsumerState<SetupFrogScreen> {
       onHowToPlay: () => openHowTo(context, ref,
           moduleId: widget.moduleId, subtitle: '$_perSide a side'),
       bestLine: _seriesLine(agg),
-      preview: _LanePreview(perSide: _perSide),
+      preview: _LanePreview(perSide: _perSide, gaps: _mode == FrogMode.puzzle ? 1 : 3),
       options: [
         SetupSection(
           label: 'Lane',
-          caption: 'Pieces a side. The lane is one longer than both blocks together.',
+          caption: race
+              ? 'Pieces a side. The race lane leaves room between the blocks, so '
+                  'a side can actually finish first.'
+              : 'Pieces a side. The puzzle is the classic one-gap lane.',
           child: SegmentedSelector<int>(
             options: const [3, 4, 5],
             selected: _perSide,
@@ -156,14 +159,15 @@ class _SetupFrogScreenState extends ConsumerState<SetupFrogScreen> {
 /// The lane at the chosen length, with both goal washes already showing — the
 /// same thing the board draws on its first frame.
 class _LanePreview extends StatelessWidget {
-  const _LanePreview({required this.perSide});
+  const _LanePreview({required this.perSide, required this.gaps});
   final int perSide;
+  final int gaps;
 
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
     final seats = identitiesFor(2);
-    final cells = perSide * 2 + 1;
+    final cells = perSide * 2 + gaps;
     return SizedBox(
       width: 44,
       height: 170,

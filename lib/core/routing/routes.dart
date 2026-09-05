@@ -15,6 +15,10 @@ class Routes {
   static const String about = '/about';
   static const String theme = '/theme';
 
+  /// The custom-theme builder, pushed from the Theme screen: `/theme/custom`.
+  static const String themeCustom = '/theme/custom';
+  static const String themeCustomPattern = 'custom';
+
   /// Game setup: `/game/:id`.
   static String gameSetup(String id) => '/game/$id';
 

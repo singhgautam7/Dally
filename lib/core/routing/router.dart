@@ -9,6 +9,7 @@ import '../../features/shell/settings/settings_screen.dart';
 import '../../features/shell/stats/activity_screen.dart';
 import '../../features/shell/stats/game_stats_screen.dart';
 import '../../features/shell/stats/stats_screen.dart';
+import '../../features/shell/theme_picker/custom_theme_screen.dart';
 import '../../features/shell/theme_picker/theme_picker_screen.dart';
 import '../../features/shell/welcome/welcome_screen.dart';
 import '../app_providers.dart';
@@ -64,6 +65,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.theme,
         builder: (context, state) => const ThemePickerScreen(),
+        routes: [
+          GoRoute(
+            path: Routes.themeCustomPattern,
+            builder: (context, state) => const CustomThemeScreen(),
+          ),
+        ],
       ),
       GoRoute(
         path: Routes.gameSetupPattern,

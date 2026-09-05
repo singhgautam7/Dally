@@ -125,10 +125,14 @@ class UndercoverGame {
 
   int round = 1;
 
-  /// voter → candidate. The tally is **derived** from this rather than kept
-  /// alongside it: a ballot box that stores only counts cannot take a vote back
-  /// without guessing whose it was.
-  final Map<int, int> _ballots = {};
+  /// Every vote cast this round, in the order it was cast. The tally is
+  /// **derived** from this rather than kept alongside it: a ballot box that
+  /// stores only counts cannot take a vote back without guessing whose it was.
+  ///
+  /// A private ballot knows who cast each vote, because the phone is handed to
+  /// one named person at a time. An **open ballot does not** — the phone is on
+  /// the table and taps are anonymous — so those entries carry a null voter.
+  final List<CastVote> _ballots = [];
 
   /// True once Mr. White has been voted out and is taking his one guess.
   bool awaitingWhiteGuess = false;
@@ -142,11 +146,14 @@ class UndercoverGame {
   /// candidate → votes, derived from the ballots.
   Map<int, int> get tally {
     final out = <int, int>{};
-    for (final candidate in _ballots.values) {
-      out.update(candidate, (v) => v + 1, ifAbsent: () => 1);
+    for (final v in _ballots) {
+      out.update(v.candidate, (n) => n + 1, ifAbsent: () => 1);
     }
     return out;
   }
+
+  /// The order votes were cast in, for the row of dots.
+  List<CastVote> get ballots => List.unmodifiable(_ballots);
 
   List<int> get aliveIndexes =>
       [for (var i = 0; i < players.length; i++) if (players[i].alive) i];
@@ -179,26 +186,36 @@ class UndercoverGame {
   List<int> candidatesFor(int voter) =>
       [for (final i in aliveIndexes) if (i != voter) i];
 
-  bool hasVoted(int voter) => _ballots.containsKey(voter);
+  bool hasVoted(int voter) => _ballots.any((v) => v.voter == voter);
 
-  /// Who [voter] voted for, or null.
-  int? ballotOf(int voter) => _ballots[voter];
-
-  int get votesCast => _ballots.length;
-
-  /// Every living player has had their say.
-  bool get ballotComplete => _ballots.length == aliveCount;
-
-  /// The next living player who has not voted, or null once the ballot is in.
-  int? get nextVoter {
-    for (final i in aliveIndexes) {
-      if (!_ballots.containsKey(i)) return i;
+  /// Who [voter] voted for, or null. Only a private ballot can answer this.
+  int? ballotOf(int voter) {
+    for (final v in _ballots) {
+      if (v.voter == voter) return v.candidate;
     }
     return null;
   }
 
-  /// Records one ballot. A player may not vote for themselves, and may not vote
-  /// twice — [retract] takes a vote back instead.
+  int get votesCast => _ballots.length;
+
+  /// Every living player has had their say.
+  bool get ballotComplete => _ballots.length >= aliveCount;
+
+  /// How many votes are still to come.
+  int get votesRemaining => aliveCount - _ballots.length;
+
+  /// The next living player who has not voted, or null once the ballot is in.
+  /// Only meaningful on a private ballot, which passes the phone in turn.
+  int? get nextVoter {
+    for (final i in aliveIndexes) {
+      if (!hasVoted(i)) return i;
+    }
+    return null;
+  }
+
+  /// Records one **named** ballot — the private vote, where the phone was
+  /// handed to one person. A player may not vote for themselves, and may not
+  /// vote twice; [retract] takes a vote back instead.
   void castVote({required int voter, required int candidate}) {
     if (!players[voter].alive) {
       throw ArgumentError('$voter is out and cannot vote');
@@ -209,23 +226,41 @@ class UndercoverGame {
     if (!players[candidate].alive) {
       throw ArgumentError('$candidate is already out');
     }
-    if (_ballots.containsKey(voter)) return;
-    _ballots[voter] = candidate;
+    if (hasVoted(voter)) return;
+    _ballots.add(CastVote(voter: voter, candidate: candidate));
+  }
+
+  /// Records one **anonymous** ballot — the open vote, where the phone is on
+  /// the table and anybody may be the one tapping.
+  ///
+  /// Several players voting for the same suspect is the normal case, so this
+  /// simply adds another vote until every living player has had their say. It
+  /// cannot enforce "no voting for yourself", because it does not know who is
+  /// holding the phone — the table does, and the table is looking.
+  ///
+  /// Returns false when the ballot is already full or the candidate is out.
+  bool castOpenVote(int candidate) {
+    if (ballotComplete) return false;
+    if (candidate < 0 || candidate >= players.length) return false;
+    if (!players[candidate].alive) return false;
+    _ballots.add(CastVote(candidate: candidate));
+    return true;
   }
 
   /// Takes [voter]'s ballot back, whoever it was for.
-  void retract(int voter) => _ballots.remove(voter);
+  void retract(int voter) => _ballots.removeWhere((v) => v.voter == voter);
 
   /// Takes back the most recent vote cast **for [candidate]** — "tap again to
-  /// take a vote back". Returns the voter freed, or null when nobody voted for
-  /// them, so a tap on a name with no votes can never remove someone else's.
-  int? retractVoteFor(int candidate) {
-    int? last;
-    for (final e in _ballots.entries) {
-      if (e.value == candidate) last = e.key;
+  /// take a vote back". Returns true when one came off, so a tap on a name with
+  /// no votes can never remove somebody else's.
+  bool retractVoteFor(int candidate) {
+    for (var i = _ballots.length - 1; i >= 0; i--) {
+      if (_ballots[i].candidate == candidate) {
+        _ballots.removeAt(i);
+        return true;
+      }
     }
-    if (last != null) _ballots.remove(last);
-    return last;
+    return false;
   }
 
   /// The seat(s) on the most votes. More than one is a tie.
@@ -293,6 +328,18 @@ class UndercoverGame {
 
   /// Everyone's role, for the end-of-game card.
   List<UndercoverPlayer> get roster => List.unmodifiable(players);
+}
+
+/// One vote in the box: who cast it (null on an open ballot, where taps are
+/// anonymous) and who it was for.
+class CastVote {
+  const CastVote({this.voter, required this.candidate});
+
+  final int? voter;
+  final int candidate;
+
+  @override
+  String toString() => "CastVote(${voter ?? 'open'} -> $candidate)";
 }
 
 /// Every policy that might be tuned, kept out of the game loop.

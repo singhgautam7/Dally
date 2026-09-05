@@ -14,11 +14,17 @@ class GenericPalettePreview extends StatelessWidget {
     required this.palette,
     this.selected = false,
     this.showLabel = true,
+    this.markCurrent = false,
   });
 
   final Palette palette;
   final bool selected;
   final bool showLabel;
+
+  /// Puts a mono `CURRENT` marker on the selected card. The theme picker sets
+  /// it; the welcome step does not, because there "selected" means "the one you
+  /// just tapped" rather than "the one the app is showing".
+  final bool markCurrent;
 
   @override
   Widget build(BuildContext context) {
@@ -134,7 +140,15 @@ class GenericPalettePreview extends StatelessWidget {
                         ),
                       ),
                     ),
-                    if (p.isPremium) _proBadge(p),
+                    if (markCurrent && selected)
+                      Text('CURRENT',
+                          style: DallyType.monoSm.copyWith(
+                            fontSize: 8,
+                            letterSpacing: 0.9,
+                            color: p.accent,
+                          ))
+                    else if (p.isPremium)
+                      _proBadge(p),
                   ],
                 ),
               ),

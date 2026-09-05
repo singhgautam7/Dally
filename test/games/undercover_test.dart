@@ -185,7 +185,7 @@ void main() {
       expect(g.tally[3], 2);
 
       // The most recent ballot for that name comes off, and only that one.
-      expect(g.retractVoteFor(3), 1);
+      expect(g.retractVoteFor(3), isTrue);
       expect(g.tally[3], 1);
       expect(g.hasVoted(1), isFalse);
       expect(g.hasVoted(0), isTrue);
@@ -196,7 +196,7 @@ void main() {
       g.castVote(voter: 0, candidate: 1);
       // The bug this guards: a tap on an unvoted name used to free an
       // unrelated voter and leave the tally out of step with the ballot.
-      expect(g.retractVoteFor(4), isNull);
+      expect(g.retractVoteFor(4), isFalse);
       expect(g.votesCast, 1);
       expect(g.tally[1], 1);
     });
@@ -285,6 +285,110 @@ void main() {
       expect(g.tally, isEmpty);
       expect(g.votesCast, 0);
       expect(g.round, 2);
+    });
+  });
+
+  group('the open ballot', () {
+    // The phone is on the table and taps are anonymous, so the screen cannot
+    // know who is tapping — and several people voting for the same suspect is
+    // the normal case, not an error.
+    test('several votes can land on the same candidate', () {
+      final g = deal();
+      expect(g.castOpenVote(3), isTrue);
+      expect(g.castOpenVote(3), isTrue);
+      expect(g.castOpenVote(3), isTrue);
+      expect(g.tally[3], 3);
+      expect(g.votesCast, 3);
+      expect(g.leaders, [3]);
+    });
+
+    test('the very bug: a candidate stays tappable after voting for them', () {
+      // The sequential-voter model disabled a row the moment the queue reached
+      // that player, so the second vote for a suspect was impossible to cast.
+      final g = deal();
+      g.castOpenVote(1);
+      expect(g.castOpenVote(1), isTrue, reason: 'a second vote for the same name');
+      expect(g.tally[1], 2);
+    });
+
+    test('voting stops when every living player has had their say', () {
+      final g = deal();
+      for (var i = 0; i < g.aliveCount; i++) {
+        expect(g.castOpenVote(2), isTrue, reason: 'vote $i');
+      }
+      expect(g.ballotComplete, isTrue);
+      expect(g.votesRemaining, 0);
+      expect(g.castOpenVote(2), isFalse, reason: 'the ballot is full');
+      expect(g.votesCast, g.aliveCount);
+    });
+
+    test('a full ballot makes room again when a vote is taken back', () {
+      final g = deal();
+      for (var i = 0; i < g.aliveCount; i++) {
+        g.castOpenVote(2);
+      }
+      expect(g.castOpenVote(3), isFalse);
+      expect(g.retractVoteFor(2), isTrue);
+      expect(g.ballotComplete, isFalse);
+      expect(g.castOpenVote(3), isTrue, reason: 'the corrected vote lands');
+      expect(g.tally[2], g.aliveCount - 1);
+      expect(g.tally[3], 1);
+    });
+
+    test('a dead candidate takes no votes', () {
+      final g = deal();
+      g.eliminate(4);
+      expect(g.castOpenVote(4), isFalse);
+      expect(g.votesCast, 0);
+    });
+
+    test('an off-board candidate takes no votes', () {
+      final g = deal();
+      expect(g.castOpenVote(-1), isFalse);
+      expect(g.castOpenVote(99), isFalse);
+      expect(g.votesCast, 0);
+    });
+
+    test('the dots are in the order they were cast', () {
+      final g = deal();
+      g.castOpenVote(1);
+      g.castOpenVote(2);
+      g.castOpenVote(1);
+      expect(g.ballots.map((v) => v.candidate).toList(), [1, 2, 1]);
+      // Open votes are anonymous, which is what lets anybody cast them.
+      expect(g.ballots.every((v) => v.voter == null), isTrue);
+    });
+
+    test('an open ballot resolves like any other', () {
+      final g = deal();
+      g.castOpenVote(3);
+      g.castOpenVote(3);
+      g.castOpenVote(1);
+      final result = g.resolve();
+      expect(result.tied, isFalse);
+      expect(result.eliminated, 3);
+      expect(g.votesCast, 0, reason: 'the box empties on resolve');
+    });
+
+    test('an open ballot can tie', () {
+      final g = deal();
+      g.castOpenVote(1);
+      g.castOpenVote(2);
+      expect(g.leaders, [1, 2]);
+      expect(g.resolve().tied, isTrue);
+    });
+
+    test('named and anonymous votes never get mixed up', () {
+      final g = deal();
+      g.castVote(voter: 0, candidate: 1);
+      g.castOpenVote(1);
+      expect(g.tally[1], 2);
+      expect(g.hasVoted(0), isTrue);
+      // Taking one back off the name removes the anonymous one first — it was
+      // the most recent — and leaves the named ballot intact.
+      expect(g.retractVoteFor(1), isTrue);
+      expect(g.hasVoted(0), isTrue);
+      expect(g.ballotOf(0), 1);
     });
   });
 

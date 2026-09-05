@@ -19,7 +19,7 @@ class FrogHopConfig extends GameConfig {
     this.first = FrogSide.bottom,
   });
 
-  /// Pieces a side: 3, 4 or 5. The lane is `perSide * 2 + 1` cells.
+  /// Pieces a side: 3, 4 or 5. The lane is `perSide * 2 + gaps` cells.
   final int perSide;
 
   final FrogMode mode;
@@ -29,7 +29,14 @@ class FrogHopConfig extends GameConfig {
 
   final FrogSide first;
 
-  int get lane => perSide * 2 + 1;
+  /// Empty cells between the two blocks.
+  ///
+  /// The puzzle is the classic one-gap layout, where `n² + 2n` is the minimum.
+  /// The race needs room: on a one-gap lane it cannot be won at all, and one
+  /// player can be walled out on the first move. See [FrogHopGame.gaps].
+  int get gaps => mode == FrogMode.puzzle ? 1 : 3;
+
+  int get lane => perSide * 2 + gaps;
 
   String nameOf(FrogSide side) => names[side == FrogSide.bottom ? 0 : 1];
 

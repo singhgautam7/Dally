@@ -73,6 +73,9 @@ class _PlayUndercoverScreenState extends ConsumerState<PlayUndercoverScreen>
   int _voterCursor = 0;
   int? _selected;
 
+  /// The candidate whose dot is popping in, so only the newest one animates.
+  int? _lastVoted;
+
   int? _eliminated;
   UndercoverRole? _eliminatedRole;
   bool _tiedRound = false;
@@ -112,6 +115,7 @@ class _PlayUndercoverScreenState extends ConsumerState<PlayUndercoverScreen>
     _phase = _Phase.pass;
     _speaker = 0;
     _selected = null;
+    _lastVoted = null;
     _eliminated = null;
     _eliminatedRole = null;
     _tiedRound = false;
@@ -156,6 +160,7 @@ class _PlayUndercoverScreenState extends ConsumerState<PlayUndercoverScreen>
   void _startVote() {
     setState(() {
       _selected = null;
+      _lastVoted = null;
       _voters = _game.aliveIndexes;
       _voterCursor = 0;
       _phase = widget.config.voting == UndercoverVoting.private
@@ -164,25 +169,26 @@ class _PlayUndercoverScreenState extends ConsumerState<PlayUndercoverScreen>
     });
   }
 
-  /// Open ballot: one tap each, in the order the strip names, and tapping a
-  /// name that already has votes takes the most recent of them back. The button
-  /// under the ballot names the leader and stays disabled until every living
-  /// player has voted.
+  /// Open ballot: **one tap is one vote**, from whoever is holding the phone.
+  ///
+  /// Several people voting for the same suspect is the normal case — three
+  /// votes on one name is what the screen is for — so a tap always adds until
+  /// every living player has had their say. The phone is on the table and taps
+  /// are anonymous, so no row is ever tied to a particular voter.
   void _openBallotTap(int candidate) {
-    final voter = _game.nextVoter;
-    if (voter == null || voter == candidate) return;
-    setState(() {
-      _game.castVote(voter: voter, candidate: candidate);
-      Haptics.selection(ref);
-    });
+    if (!_game.castOpenVote(candidate)) return;
+    Haptics.selection(ref);
+    // The newest dot pops in.
+    play(MotionPreset.pop);
+    setState(() => _lastVoted = candidate);
   }
 
   /// Takes back the last vote cast *for this name*. A tap on a name with no
-  /// votes frees nobody, so it can never remove someone else's ballot.
+  /// votes takes nothing, so it can never remove somebody else's.
   void _retractVoteFor(int candidate) {
-    setState(() {
-      if (_game.retractVoteFor(candidate) != null) Haptics.light(ref);
-    });
+    if (!_game.retractVoteFor(candidate)) return;
+    Haptics.light(ref);
+    setState(() => _lastVoted = null);
   }
 
   void _submitPrivateVote() {
@@ -555,10 +561,11 @@ class _PlayUndercoverScreenState extends ConsumerState<PlayUndercoverScreen>
   // ── Vote ──────────────────────────────────────────────────────────────────
 
   Widget _openVoteStage(DallyTokens t) {
-    final voter = _game.nextVoter;
     final complete = _game.ballotComplete;
     final leaders = _game.leaders;
     final leaderName = leaders.length == 1 ? _game.players[leaders.first].name : null;
+    final tally = _game.tally;
+    final pop = motionPreset == MotionPreset.pop ? motionEased.popScale() : 1.0;
     return _Stage(
       caption: 'ROUND ${_game.round} · VOTING',
       scroll: true,
@@ -567,38 +574,29 @@ class _PlayUndercoverScreenState extends ConsumerState<PlayUndercoverScreen>
             textAlign: TextAlign.center,
             style: DallyType.displayLg.copyWith(fontSize: 30, color: t.textPrimary)),
         const Gap(Insets.s2),
-        Text(
-            complete
-                ? 'Every vote is in. Tap a name to take that vote back.'
-                : '${_game.players[voter!].name} votes next.',
+        Text('One tap each. Tap again to take a vote back.',
             textAlign: TextAlign.center,
-            style: DallyType.body.copyWith(fontSize: 14, color: t.textFaint)),
+            style: DallyType.body.copyWith(fontSize: 14, color: t.textMuted)),
         const Gap(Insets.s5),
         for (final i in _game.aliveIndexes)
           Padding(
             padding: const EdgeInsets.only(bottom: Insets.s2),
             child: _CandidateRow(
               name: _game.players[i].name,
-              votes: _game.tally[i] ?? 0,
-              // A player may not vote for themselves.
-              enabled: !complete && i != voter,
-              selected: leaders.contains(i) && (_game.tally[i] ?? 0) > 0,
-              onTap: () => _openBallotTap(i),
-              // Retracting only opens once the ballot is in, so a tap during
-              // voting can never remove somebody else's vote by accident.
-              onRetract: complete && (_game.tally[i] ?? 0) > 0
-                  ? () => _retractVoteFor(i)
-                  : null,
+              votes: tally[i] ?? 0,
+              // The leader is the one the button under the ballot names.
+              leading: leaders.contains(i) && (tally[i] ?? 0) > 0,
+              // While the ballot is open a tap adds a vote; once it is full a
+              // tap takes one back, which is how a mis-tap is corrected.
+              onTap: complete ? () => _retractVoteFor(i) : () => _openBallotTap(i),
+              popScale: _lastVoted == i ? pop : 1,
             ),
           ),
         const Gap(Insets.s3),
-        Text('VOTES CAST  ${_game.votesCast} / ${_game.aliveCount}',
-            textAlign: TextAlign.center,
-            style: DallyType.label
-                .copyWith(fontSize: 10, letterSpacing: 1.4, color: t.textFaint)),
+        _VotesCast(cast: _game.votesCast, of: _game.aliveCount),
       ],
       primaryLabel: leaderName == null ? 'Vote out' : 'Vote out $leaderName',
-      primaryEnabled: complete,
+      primaryEnabled: complete && leaderName != null,
       onPrimary: _resolve,
     );
   }
@@ -624,8 +622,7 @@ class _PlayUndercoverScreenState extends ConsumerState<PlayUndercoverScreen>
               name: _game.players[i].name,
               // A private ballot never shows a running tally.
               votes: null,
-              enabled: true,
-              selected: _selected == i,
+              leading: _selected == i,
               onTap: () => setState(() => _selected = i),
             ),
           ),
@@ -969,56 +966,144 @@ class _OrderRow extends StatelessWidget {
   }
 }
 
+/// One name on the ballot: the name, a dot for every vote it has taken, and
+/// the count.
+///
+/// The dots are the point — a table can read "three on Sam" across a room
+/// without parsing a numeral, and the numeral is there for the exact figure.
+/// The leader takes a surface fill and an accent outline, so the name the
+/// button is about to act on is never in doubt.
 class _CandidateRow extends StatelessWidget {
   const _CandidateRow({
     required this.name,
     required this.votes,
-    required this.enabled,
-    required this.selected,
+    required this.leading,
     required this.onTap,
-    this.onRetract,
+    this.popScale = 1,
   });
 
   final String name;
 
   /// Null on a private ballot, which never shows a running tally.
   final int? votes;
-  final bool enabled;
-  final bool selected;
+
+  /// The current leader (open ballot) or the selected name (private ballot).
+  final bool leading;
+
   final VoidCallback onTap;
-  final VoidCallback? onRetract;
+
+  /// Scale for the newest dot, so only the vote just cast pops.
+  final double popScale;
 
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
-    return Opacity(
-      opacity: enabled || (votes ?? 0) > 0 ? 1 : 0.45,
+    final n = votes ?? 0;
+    return Semantics(
+      button: true,
+      label: votes == null ? name : '$name, $n vote${n == 1 ? '' : 's'}',
       child: GestureDetector(
-        onTap: enabled ? onTap : onRetract,
+        onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
           decoration: BoxDecoration(
-            color: selected ? t.accent.withValues(alpha: 0.14) : t.surfaceAlt,
+            color: leading ? t.surfaceAlt : null,
             borderRadius: Radii.containerBR,
             border: Border.all(
-                color: selected ? t.accent : t.border, width: selected ? 2 : 1),
+                color: leading ? t.accent : t.border, width: leading ? 1.4 : 1),
           ),
           child: Row(
             children: [
               Expanded(
                 child: Text(name,
-                    style: DallyType.body.copyWith(fontSize: 16, color: t.textPrimary)),
+                    style: DallyType.body.copyWith(
+                      fontSize: 16,
+                      fontWeight: leading ? FontWeight.w600 : FontWeight.w400,
+                      color: t.textPrimary,
+                    )),
               ),
-              if (votes != null)
-                Text('$votes',
-                    style: DallyType.monoChip.copyWith(
-                        fontSize: 16,
-                        color: votes! > 0 ? t.accent : t.textFaint))
-              else if (selected)
-                Icon(Icons.check_circle_rounded, size: 20, color: t.accent),
+              if (votes == null)
+                // The private ballot marks the one name this voter picked.
+                Icon(leading ? Icons.check_circle_rounded : Icons.circle_outlined,
+                    size: 20, color: leading ? t.accent : t.textFaint)
+              else ...[
+                _VoteDots(count: n, popScale: popScale),
+                const Gap.h(Insets.s3),
+                SizedBox(
+                  width: 18,
+                  child: Text('$n',
+                      textAlign: TextAlign.right,
+                      style: DallyType.monoChip.copyWith(
+                        fontSize: 14,
+                        color: n == 0
+                            // A zero is quieter than faint: it is the absence
+                            // of information, not information.
+                            ? Color.lerp(t.textFaint, t.bg, 0.45)
+                            : (leading ? t.textPrimary : t.textMuted),
+                      )),
+                ),
+              ],
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// One 8px accent dot per vote, 5px apart. The newest one pops in; the rest
+/// hold, so a row that already had votes does not re-animate on every tap.
+class _VoteDots extends StatelessWidget {
+  const _VoteDots({required this.count, required this.popScale});
+
+  final int count;
+  final double popScale;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    if (count == 0) return const SizedBox.shrink();
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < count; i++) ...[
+          if (i > 0) const Gap.h(5),
+          Transform.scale(
+            scale: i == count - 1 ? popScale : 1,
+            child: Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(color: t.accent, shape: BoxShape.circle),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// The running total, on its own quiet panel under the ballot.
+class _VotesCast extends StatelessWidget {
+  const _VotesCast({required this.cast, required this.of});
+
+  final int cast;
+  final int of;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(color: t.surfaceAlt, borderRadius: Radii.cellBR),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text('Votes cast',
+                style: DallyType.body.copyWith(fontSize: 14, color: t.textMuted)),
+          ),
+          Text('$cast / $of',
+              style: DallyType.monoChip.copyWith(fontSize: 14, color: t.textPrimary)),
+        ],
       ),
     );
   }

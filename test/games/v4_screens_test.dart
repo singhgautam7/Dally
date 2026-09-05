@@ -254,38 +254,82 @@ void main() {
         await tester.pumpAndSettle();
       }
       expect(find.text('Who is out?'), findsOneWidget);
-      expect(find.textContaining('VOTES CAST'), findsOneWidget);
+      expect(find.text('One tap each. Tap again to take a vote back.'), findsOneWidget);
+      expect(find.text('Votes cast'), findsOneWidget);
+      expect(find.text('0 / 5'), findsOneWidget);
 
       // The button is dead until every living player has voted.
       expect(tester.widget<PrimaryPill>(find.byType(PrimaryPill).first).enabled,
           isFalse);
 
-      // One ballot each. The strip names whose turn it is, and a player may
-      // never vote for themselves — so the target is read off the screen
-      // rather than assumed.
-      const roster = ['Ravi', 'Ana', 'Priya', 'Noor', 'Sam'];
-      for (var i = 0; i < 5; i++) {
-        final strip = tester
-            .widgetList<Text>(find.byType(Text))
-            .map((t) => t.data ?? '')
-            .firstWhere((d) => d.endsWith('votes next.'));
-        final voter = strip.split(' ').first;
-        final target = roster.firstWhere((n) => n != voter);
-        await tester.tap(find.text(target));
+      // **Three votes on one name** — the case the sequential-voter model made
+      // impossible, and the reason this test exists.
+      for (var i = 0; i < 3; i++) {
+        await tester.tap(find.text('Ana'));
         await tester.pumpAndSettle();
       }
-      expect(find.text('VOTES CAST  5 / 5'), findsOneWidget);
-      expect(find.text('Every vote is in. Tap a name to take that vote back.'),
-          findsOneWidget);
+      expect(find.text('3 / 5'), findsOneWidget);
+      // The row carries the numeral, and one accent dot per vote beside it.
+      expect(find.text('3'), findsOneWidget, reason: "Ana's count");
+      expect(_dotsFor(tester, 'Ana'), 3);
+      expect(_dotsFor(tester, 'Priya'), 0, reason: 'an unvoted row has no dots');
 
-      // The button now names the leader and is live.
+      // …and the rest land elsewhere.
+      await tester.tap(find.text('Priya'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Noor'));
+      await tester.pumpAndSettle();
+      expect(find.text('5 / 5'), findsOneWidget);
+      expect(_dotsFor(tester, 'Priya'), 1);
+      expect(_dotsFor(tester, 'Noor'), 1);
+
+      // Full ballot: the button names the leader and is live.
       final button = tester.widget<PrimaryPill>(find.byType(PrimaryPill).first);
       expect(button.enabled, isTrue);
+      expect(button.label, 'Vote out Ana');
 
       await tester.tap(find.byType(PrimaryPill).first);
       await tester.pumpAndSettle();
       // …and the reveal names a role.
       expect(find.text('Voted out'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a full ballot takes a vote back on the next tap', (tester) async {
+      await pumpGameScreen(tester, undercover(), size: phone);
+      await tester.pump();
+      for (var i = 0; i < 5; i++) {
+        await tester.tap(find.byType(PrimaryPill).first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Tap the card to reveal'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Hide and pass on'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byType(PrimaryPill).first);
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.text('Start round 1'));
+      await tester.pumpAndSettle();
+      for (var i = 0; i < 5; i++) {
+        await tester.tap(find.byType(PrimaryPill).first);
+        await tester.pumpAndSettle();
+      }
+
+      // Fill the ballot on one name…
+      for (var i = 0; i < 5; i++) {
+        await tester.tap(find.text('Ana'));
+        await tester.pumpAndSettle();
+      }
+      expect(find.text('5 / 5'), findsOneWidget);
+      // …a sixth tap cannot over-fill it…
+      await tester.tap(find.text('Ana'));
+      await tester.pumpAndSettle();
+      expect(find.text('4 / 5'), findsOneWidget,
+          reason: 'a tap on a full ballot takes one back');
+      // …and the freed vote can be re-cast somewhere else.
+      await tester.tap(find.text('Priya'));
+      await tester.pumpAndSettle();
+      expect(find.text('5 / 5'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -320,3 +364,24 @@ void main() {
 
 /// The registered module, so a screen test uses the same instance the app does.
 dynamic registryModule(String id) => kGameModules.firstWhere((m) => m.id == id);
+
+/// How many vote dots the row for [name] is showing: 8×8 circles inside that
+/// candidate's row. The dots are the thing a table reads across the room, so
+/// they are asserted as dots rather than inferred from the numeral.
+int _dotsFor(WidgetTester tester, String name) {
+  final row = find.ancestor(
+    of: find.text(name),
+    matching: find.byType(Container),
+  );
+  return tester
+      .widgetList<Container>(find.descendant(of: row.last, matching: find.byType(Container)))
+      .where((c) {
+        final box = c.constraints?.biggest;
+        final decoration = c.decoration;
+        return box?.width == 8 &&
+            box?.height == 8 &&
+            decoration is BoxDecoration &&
+            decoration.shape == BoxShape.circle;
+      })
+      .length;
+}

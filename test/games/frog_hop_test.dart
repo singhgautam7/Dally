@@ -19,10 +19,26 @@ void main() {
       ]);
     });
 
-    test('the lane is one longer than both blocks together, at every size', () {
+    test('the lane is both blocks plus the gaps between them', () {
       for (final n in [1, 3, 4, 5]) {
         expect(FrogHopGame(perSide: n).length, n * 2 + 1, reason: '$n a side');
+        expect(FrogHopGame(perSide: n, gaps: 3).length, n * 2 + 3, reason: '$n a side');
       }
+    });
+
+    test('a race lane deals both blocks to their own ends, gaps between', () {
+      final g = FrogHopGame(perSide: 3, gaps: 3);
+      expect([for (var i = 0; i < g.length; i++) g.at(i)], [
+        FrogSide.bottom,
+        FrogSide.bottom,
+        FrogSide.bottom,
+        null,
+        null,
+        null,
+        FrogSide.top,
+        FrogSide.top,
+        FrogSide.top,
+      ]);
     });
 
     test('nobody starts home, and both goals are the far cells', () {
@@ -238,6 +254,101 @@ void main() {
         g.restore(s);
         expect([for (var i = 0; i < g.length; i++) g.at(i)], s.cells);
         expect(g.turn, s.turn);
+      }
+    });
+  });
+
+  group('the race is a race', () {
+    // What the one-gap lane actually was: unwinnable, and routinely one-sided.
+    // These walk the *whole* reachable state space, so they are proofs rather
+    // than samples.
+    ({int wins, int deadlocks, bool bothSidesAlwaysMove}) explore(
+        int perSide, int gaps) {
+      String key(FrogHopGame g) =>
+          [for (var i = 0; i < g.length; i++) g.at(i)?.name[0] ?? '.'].join() +
+          g.turn.name[0];
+
+      final start = FrogHopGame(perSide: perSide, gaps: gaps);
+      final seen = <String>{key(start)};
+      final queue = <FrogSnapshot>[start.snapshot()];
+      final scratch = FrogHopGame(perSide: perSide, gaps: gaps);
+      final moversSeen = <FrogSide>{};
+      var wins = 0, deadlocks = 0;
+
+      while (queue.isNotEmpty) {
+        final s = queue.removeAt(0);
+        scratch.restore(s);
+        if (scratch.winner != null) {
+          wins++;
+          continue;
+        }
+        final moves = scratch.legalMoves;
+        if (moves.isEmpty) {
+          deadlocks++;
+          continue;
+        }
+        moversSeen.add(scratch.turn);
+        for (final m in moves) {
+          scratch.restore(s);
+          scratch.play(m);
+          if (seen.add(key(scratch))) queue.add(scratch.snapshot());
+        }
+      }
+      return (
+        wins: wins,
+        deadlocks: deadlocks,
+        bothSidesAlwaysMove: moversSeen.length == 2,
+      );
+    }
+
+    for (final n in [3, 4, 5]) {
+      test('$n a side: a one-gap lane cannot be won by anybody', () {
+        // Filling your own home on a one-gap lane forces the other side into
+        // theirs at the same instant, so "first side home" has no meaning —
+        // and a single move can wall the other side out entirely.
+        expect(explore(n, 1).wins, 0);
+      });
+
+      test('$n a side: the race lane can be won', () {
+        final r = explore(n, 3);
+        expect(r.wins, greaterThan(0),
+            reason: 'a side must be able to finish before the other');
+        expect(r.bothSidesAlwaysMove, isTrue,
+            reason: 'and both sides must get to play');
+      });
+    }
+
+    test('both sides get a turn from the very first move', () {
+      // The reported bug: bottom moved, bottom moved again, and top never
+      // played at all.
+      final g = FrogHopGame(perSide: 3, gaps: 3);
+      final movers = <FrogSide>{};
+      var guard = 0;
+      while (!g.isOver && guard++ < 50) {
+        final moves = g.legalMoves;
+        if (moves.isEmpty) break;
+        movers.add(g.turn);
+        // The move a hurried player makes: the first one offered.
+        g.play(moves.first);
+        if (movers.length == 2) break;
+      }
+      expect(movers, {FrogSide.bottom, FrogSide.top});
+    });
+
+    test('a side is only ever skipped when it genuinely cannot move', () {
+      final g = FrogHopGame(perSide: 3, gaps: 3);
+      var guard = 0;
+      while (!g.isOver && guard++ < 60) {
+        final moves = g.legalMoves;
+        if (moves.isEmpty) break;
+        final before = g.turn;
+        g.play(moves.first);
+        if (g.turn == before && !g.isOver) {
+          // The turn stayed put, so the other side must have had nothing.
+          final other = before == FrogSide.bottom ? FrogSide.top : FrogSide.bottom;
+          expect(g.movesFor(other), isEmpty);
+          expect(g.otherSidePassed, isTrue);
+        }
       }
     });
   });
