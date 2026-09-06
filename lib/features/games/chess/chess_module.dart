@@ -54,6 +54,8 @@ class ChessModule extends GameModule {
   List<StyleOption> get styleOptions => const [
         StyleOption(id: 'classic', label: 'Classic', recommended: true),
         StyleOption(id: 'outline', label: 'Outline'),
+        StyleOption(id: 'pebble', label: 'Pebble'),
+        StyleOption(id: 'pebbleOutline', label: 'Pebble Outline'),
         StyleOption(id: 'minimal', label: 'Minimal'),
         StyleOption(id: 'letters', label: 'Letters'),
       ];
@@ -89,7 +91,7 @@ class ChessModule extends GameModule {
   @override
   String? statSummary(GameAggregate agg) {
     if (agg.sessions == 0) return null;
-    return '\${agg.outcome(SessionOutcome.won)} / \${agg.outcome(SessionOutcome.lost)} / \${agg.outcome(SessionOutcome.drawn)}';
+    return '${agg.outcome(SessionOutcome.won)} / ${agg.outcome(SessionOutcome.lost)} / ${agg.outcome(SessionOutcome.drawn)}';
   }
   @override
   Widget buildSetupScreen(BuildContext context, WidgetRef ref) =>

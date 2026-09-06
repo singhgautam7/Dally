@@ -59,6 +59,7 @@ class FrogHopModule extends GameModule {
   List<StatBlock> statBlocks(GameAggregate agg) {
     final bottom = agg.outcome(SessionOutcome.won);
     final top = agg.outcome(SessionOutcome.lost);
+    // Legacy sessions only — the race has had no draw since v5.
     final drawn = agg.outcome(SessionOutcome.drawn);
     final puzzle = agg.metric('puzzleMoves');
     return [
@@ -66,7 +67,7 @@ class FrogHopModule extends GameModule {
         StatBlock.bars(title: 'Series', bars: [
           StatBar('Bottom', bottom, accent: true),
           StatBar('Top', top),
-          StatBar('Drawn', drawn),
+          if (drawn > 0) StatBar('Drawn', drawn),
         ]),
       StatBlock.cells(cells: [
         StatCell.count('Games', agg.sessions),

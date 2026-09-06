@@ -33,9 +33,13 @@ class StatsScreen extends ConsumerWidget {
     final aggregates = history.allAggregates();
     final totalSessions = history.totalSessions;
 
+    // Outcome-less entries (Toys) are absent from Stats rather than present
+    // and empty — the structural guard, so no row can ever render a
+    // placeholder for something that counts nothing (§11a.1).
     final played = <(GameModule, GameAggregate)>[
       for (final m in registry)
-        if ((aggregates[m.id]?.sessions ?? 0) > 0) (m, aggregates[m.id]!),
+        if (m.hasSessionOutcome && (aggregates[m.id]?.sessions ?? 0) > 0)
+          (m, aggregates[m.id]!),
     ]..sort((a, b) => b.$2.sessions.compareTo(a.$2.sessions));
 
     return Scaffold(

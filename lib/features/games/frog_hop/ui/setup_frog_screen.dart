@@ -27,7 +27,7 @@ class SetupFrogScreen extends ConsumerStatefulWidget {
 }
 
 class _SetupFrogScreenState extends ConsumerState<SetupFrogScreen> {
-  int _perSide = 3;
+  static const int _perSide = kPerSide;
   FrogMode _mode = FrogMode.race;
   FrogSide _first = FrogSide.bottom;
 
@@ -74,19 +74,6 @@ class _SetupFrogScreenState extends ConsumerState<SetupFrogScreen> {
       bestLine: _seriesLine(agg),
       preview: _LanePreview(perSide: _perSide, gaps: _mode == FrogMode.puzzle ? 1 : 3),
       options: [
-        SetupSection(
-          label: 'Lane',
-          caption: race
-              ? 'Pieces a side. The race lane leaves room between the blocks, so '
-                  'a side can actually finish first.'
-              : 'Pieces a side. The puzzle is the classic one-gap lane.',
-          child: SegmentedSelector<int>(
-            options: const [3, 4, 5],
-            selected: _perSide,
-            labelOf: (n) => '$n',
-            onSelect: (n) => setState(() => _perSide = n),
-          ),
-        ),
         SetupSection(
           label: 'Mode',
           caption: race

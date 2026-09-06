@@ -46,6 +46,8 @@ definition. **Do not add a fifth without writing down why:**
 3. Solitaire's card face and suit colours — "red suit" is a rule too.
 4. `installErrorBoundary`'s fallback — it must render when the token layer
    itself is what failed.
+5. The Toys **material palette** — sand is not water and water is not fire, so
+   a powder sandbox cannot be monochrome. Bounded and fenced in §11a.4.
 
 ---
 
@@ -450,6 +452,76 @@ Any game with two or more seats uses the shared system.
 
 ---
 
+## 11a. Toys — the sandbox category
+
+A **Toy** is a sandbox. **No win, no loss, no score, no game over, no
+opponent, no turns.** You open it, you play with it, you leave. Every rule
+below follows from that one sentence; if a change to a toy needs a number kept,
+the change is wrong, not the rule.
+
+### 11a.1 It is a module, not a new idea
+
+A toy implements `GameModule` and is registered in `kGameModules` like anything
+else (§2.1). It lights up Home, Search, Filters and routing with **zero edits**
+to those screens. What it declares differently is one thing:
+
+* **`hasSessionOutcome` is false.** A toy records no session, so Stats,
+  History, Home, Search and Filter must render an outcome-less entry without
+  reaching for a placeholder. The default `statBlocks` and `statSummary` return
+  nothing for such a module, and the Stats screen skips it entirely — a toy is
+  **absent** from Stats, never present-and-empty.
+* Home shows the word **Sandbox** in the slot a game uses for its best score.
+* A toy never carries a resume badge, and never writes a save.
+
+This is structural on purpose: it is the same class of bug as the BY GAME leak,
+and the guard belongs in the shared path rather than in each screen.
+
+### 11a.2 Back, and the absence of chrome
+
+* **Back → Home, directly.** No pause step, no confirm: a sandbox has nothing
+  to lose. It is still `GameBackScope` / `leaveGame` — a toy passes
+  `ended: true`, which is exactly "there is nothing to confirm".
+* **No Undo control and no How to play.** There is no move to take back, and
+  the instructions are the one-line first-run hint. The one place the word
+  *Undo* appears in a toy is the 5-second reversal after **Clear**, and it
+  restores a canvas, not a move.
+* The overflow sheet keeps Styles, Sound, Theme and one line about the toy, and
+  drops Restart.
+
+### 11a.3 Rendering and the loop
+
+* **Raw pixels or one `CustomPainter`, off the widget tree.** A cell grid is a
+  buffer (`Uint8List`) painted as one `ui.Image` or one painter pass — never a
+  widget per cell, at any size.
+* **`FixedStepLoop` / `RealTimeGameMixin`, always.** The sim integrates against
+  the fixed `dt`, so it runs at the same speed on 60, 90 and 120 Hz.
+* **Background pauses the sim and resume shows the frozen frame** — never a
+  catch-up burst.
+* Canvas state is **not** persisted. Leaving discards it; only settings and
+  Styles persist.
+* Reduce Motion leaves the simulation alone — it *is* the content — and only
+  shortens the chrome fades.
+
+### 11a.4 The material palette — the fifth literal-colour exception
+
+Materials are the one bounded exception added to §1's register, and it is
+fenced:
+
+* A fixed set of **at most eight** material colours, resolved per neutral ramp
+  and **accent-independent**, so the QA matrix stays at three resolved sets
+  rather than thirty. AMOLED reuses the Dark set.
+* They behave like data colours: they **identify a substance and never
+  decorate**. No material colour appears on a chip, a label, a toggle or a
+  tile — the material selector's swatch is the only place one leaves the canvas.
+* Anything that is not a material — ground, chrome, live cells, ripple crests,
+  pendulum arms — stays on mono-plus-accent. This is not the mono rule relaxing
+  generally.
+* Materials are decorative fills and carry no contrast threshold of their own,
+  but every one stays at least one visible step off `bg` in all three ramps so
+  nothing disappears.
+
+---
+
 ## 12. Naming and trademark safety
 
 Generic, descriptive names only — in ids, titles, taglines, tags, asset
@@ -538,6 +610,9 @@ Renaming one is a migration, not an edit — see §9, and
       scale.
 - [ ] Empty / error / loading states present.
 - [ ] No trademarked name anywhere.
+- [ ] If it is a Toy: nothing counts, `hasSessionOutcome` is false, it is absent
+      from Stats rather than empty in it, back goes straight Home, the canvas
+      is painted not built, and the sim pauses on background (§11a).
 - [ ] Tests added — including one that would have caught the bug being fixed.
 - [ ] `flutter analyze` clean, `flutter test` green.
 

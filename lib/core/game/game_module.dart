@@ -84,6 +84,15 @@ abstract class GameModule {
   /// band of home the game appears in.
   GameCategory get category;
 
+  /// Whether a session of this ends in something worth recording.
+  ///
+  /// False for a **Toy** (`.agents/CLAUDE.md` §11a): a sandbox has no win, no
+  /// loss and no score, so it writes no session and must be *absent* from
+  /// Stats rather than present and empty. The defaults below all read this, so
+  /// declaring it is the only thing a toy has to do — no shell screen switches
+  /// on a category or an id to get this right.
+  bool get hasSessionOutcome => category != GameCategory.toy;
+
   /// How many bodies the game needs, for the Players filter.
   PlayerCount get playerCount =>
       players.contains(PlayerMode.passAndPlay) ? PlayerCount.two : PlayerCount.solo;
@@ -144,6 +153,7 @@ abstract class GameModule {
   /// records for free (sessions, play time, score); override to add the ones
   /// only this game understands.
   List<StatBlock> statBlocks(GameAggregate agg) {
+    if (!hasSessionOutcome) return const [];
     final score = agg.metric('score');
     return [
       if (!score.isEmpty)
@@ -163,14 +173,16 @@ abstract class GameModule {
 
   /// One mono line for the "By game" row on the Stats overview. Null hides it.
   String? statSummary(GameAggregate agg) {
+    if (!hasSessionOutcome) return null;
     final best = agg.metric('score').best(higherIsBetter: true);
     if (best == null) return null;
     return 'Best ${StatFormat.number.render(best)}';
   }
 
-  /// The best-score line for the home tile, formatted by the game from its own
-  /// namespaced stats. Returns null when there's nothing to show yet.
-  String? homeBestLabel(StatsRepository stats) => null;
+  /// The bottom line of the home tile: a game states its record, a toy states
+  /// its nature. Null when there is nothing to show yet.
+  String? homeBestLabel(StatsRepository stats) =>
+      hasSessionOutcome ? null : 'Sandbox';
 
   /// The tile subtitle — the game's vibes joined, e.g. `"Brain teaser · Leisure"`.
   String get vibeLabel => vibes.map((v) => v.label).join(' · ');

@@ -33,6 +33,8 @@ import '../../features/games/mental_math/missing_operator_module.dart';
 import '../../features/games/mental_math/sequence_module.dart';
 import '../../features/games/mental_math/target_number_module.dart';
 import '../../features/games/mental_math/true_false_module.dart';
+import '../../features/toys/double_pendulum/double_pendulum_module.dart';
+import '../../features/toys/falling_sand/falling_sand_module.dart';
 import 'game_category.dart';
 import 'game_module.dart';
 
@@ -84,6 +86,10 @@ final List<GameModule> kGameModules = <GameModule>[
   ReactionModule(),
   RacerModule(),
   AvoiderModule(),
+
+  // Toys — sandboxes. Nothing to win, nothing to lose (§11a).
+  FallingSandModule(),
+  DoublePendulumModule(),
 ];
 
 /// Exposes the ordered module list to the widget tree.
@@ -98,9 +104,14 @@ final gameByIdProvider = Provider.family<GameModule?, String>((ref, id) {
   return null;
 });
 
-/// How many games are registered. Every counted string in the app derives from
-/// this — nothing hardcodes the number of games.
+/// How many entries are registered. Every counted string in the app derives
+/// from this — nothing hardcodes the number.
 final gameCountProvider = Provider<int>((ref) => ref.watch(gameRegistryProvider).length);
+
+/// How many of those are Toys. A sandbox is not a game, so the catalogue line
+/// counts them separately rather than over-claiming (§11a).
+final toyCountProvider = Provider<int>((ref) =>
+    ref.watch(gameRegistryProvider).where((m) => m.category == GameCategory.toy).length);
 
 /// How many catalogue categories have at least one game.
 final categoryCountProvider = Provider<int>((ref) {
@@ -111,9 +122,15 @@ final categoryCountProvider = Provider<int>((ref) {
   return present.length;
 });
 
-/// `"22 games · 6 categories"`, with singular forms. Used on Welcome and About.
+/// `"22 games · 4 toys · 7 categories"`, with singular forms and the toy clause
+/// omitted when there are none. Used on Welcome and About.
 final catalogueLineProvider = Provider<String>((ref) {
-  final g = ref.watch(gameCountProvider);
+  final toys = ref.watch(toyCountProvider);
+  final g = ref.watch(gameCountProvider) - toys;
   final c = ref.watch(categoryCountProvider);
-  return '$g game${g == 1 ? '' : 's'} · $c categor${c == 1 ? 'y' : 'ies'}';
+  return [
+    '$g game${g == 1 ? '' : 's'}',
+    if (toys > 0) '$toys toy${toys == 1 ? '' : 's'}',
+    '$c categor${c == 1 ? 'y' : 'ies'}',
+  ].join(' · ');
 });

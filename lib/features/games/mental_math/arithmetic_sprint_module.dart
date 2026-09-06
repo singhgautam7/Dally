@@ -8,6 +8,8 @@ import '../../../core/theme/dally_tokens.dart';
 import '../../../core/widgets/game_glyph.dart';
 import '../../../core/widgets/how_to_play.dart';
 import 'ui/play_sprint_screen.dart';
+import 'ui/math_previews.dart';
+import 'ui/setup_math_screen.dart';
 
 /// Arithmetic Sprint — 60 seconds of arithmetic, range widening as you go.
 class ArithmeticSprintModule extends GameModule {
@@ -83,8 +85,11 @@ class ArithmeticSprintModule extends GameModule {
   }
 
   @override
-  Widget buildSetupScreen(BuildContext context, WidgetRef ref) =>
-      PlaySprintScreen(module: this);
+  Widget buildSetupScreen(BuildContext context, WidgetRef ref) => SetupMathScreen(
+        module: this,
+        preview: const SprintPreview(),
+        levelCaption: 'How hard the sums get. The clock is sixty seconds at every level.',
+      );
 
   @override
   Widget buildPlayScreen(BuildContext context, WidgetRef ref, GameConfig config) =>
@@ -106,7 +111,7 @@ class ArithmeticSprintModule extends GameModule {
         HowToStep(Icon(Icons.check_rounded, size: 20, color: t.textMuted), 'Tick to confirm',
             'For longer answers, where the length is ambiguous'),
       ],
-      tip: 'Difficulty is set once on home and applies to all six drills.',
+      tip: 'The level you pick here carries to the other drills, and each level keeps its own best.',
     );
   }
 }

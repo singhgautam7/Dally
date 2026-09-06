@@ -93,7 +93,7 @@ class SnakeModule extends GameModule {
   @override
   String? statSummary(GameAggregate agg) {
     final best = agg.metric('score').best(higherIsBetter: true);
-    return best == null ? null : 'Best \${formatGrouped(best)}';
+    return best == null ? null : 'Best ${formatGrouped(best)}';
   }
   @override
   Widget buildSetupScreen(BuildContext context, WidgetRef ref) =>
@@ -119,7 +119,7 @@ class SnakeModule extends GameModule {
           'Food. One segment longer, one point.',
         ),
         HowToLegend(howToCell(t: t, color: t.surfaceAlt, hairline: true),
-            'The edge is a wall — unless you turned wrap on.'),
+            'The edge wraps you to the other side — unless you turned wrap off.'),
       ],
       controls: [
         HowToStep(Icon(Icons.swipe_rounded, size: 20, color: t.textMuted), 'Swipe',

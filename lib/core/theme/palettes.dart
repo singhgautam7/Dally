@@ -4,6 +4,7 @@ import 'package:flutter/painting.dart' show HSVColor;
 
 import 'accents.dart';
 import 'palette.dart';
+import 'materials.dart';
 
 /// Fixed Minesweeper digit colours for dark ramps (1–4 cool, 5–8 warm).
 const List<Color> _inkNumbers = [
@@ -239,6 +240,10 @@ class DallyPalettes {
       // near-white and would leave a filled button with two white candidates.
       onAccent: bestForegroundOn(accent, ink: kLightRamp.textPrimary),
       minesweeperNumbers: mode == DallyMode.light ? _paperNumbers : _inkNumbers,
+      // Accent-independent, and tinted with the neutrals so a warm preset pulls
+      // the whole set warmer rather than leaving the canvas out of key.
+      materials:
+          (mode == DallyMode.light ? kLightMaterials : kDarkMaterials).nudgedToward(hue),
       scaleMid: ramp.scaleMid,
       scalePeak: ramp.scalePeak,
     );

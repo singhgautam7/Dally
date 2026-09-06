@@ -40,6 +40,12 @@ class SnakeGame {
   late int food;
   bool dead = false;
 
+  /// The cell the tail occupied *before* the last [step] — where it slides
+  /// from. Null when the last step grew the snake (nothing was vacated, so the
+  /// tail stays put). Without this the tail has no previous cell to interpolate
+  /// out of and pops a whole cell on every tick.
+  int? prevTail;
+
   int get length => snake.length;
   Dir get direction => _dir;
   int get head => snake.first;
@@ -55,6 +61,7 @@ class SnakeGame {
     _dir = Dir.right;
     _pending = Dir.right;
     dead = false;
+    prevTail = null;
     _placeFood();
   }
 
@@ -110,9 +117,10 @@ class SnakeGame {
 
     snake.insert(0, newHead);
     if (willGrow) {
+      prevTail = null;
       _placeFood();
     } else {
-      snake.removeLast();
+      prevTail = snake.removeLast();
     }
     return StepResult(grew: willGrow, dead: false);
   }

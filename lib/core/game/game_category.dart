@@ -20,8 +20,8 @@ enum Vibe {
 }
 
 /// The catalogue category. [section] groups the home grid into its labelled
-/// bands — Games / Mental math / Quick tools / Arcade — so a new game lands in
-/// the right place from its metadata alone.
+/// bands — Games / Mental math / Quick tools / Arcade / Toys — so a new entry
+/// lands in the right place from its metadata alone.
 enum GameCategory {
   classic('Classic', HomeSection.games),
   board('Board', HomeSection.games),
@@ -30,12 +30,27 @@ enum GameCategory {
   word('Word', HomeSection.words),
   mentalMath('Mental Math', HomeSection.mentalMath),
   quickPlay('Quick Play', HomeSection.quickTools),
-  arcade('Arcade (BETA)', HomeSection.arcade);
+  arcade('Arcade', HomeSection.arcade, beta: true),
 
-  const GameCategory(this.label, this.section);
-  final String label;
+  /// Sandboxes. Nothing to win, nothing to lose — see `.agents/CLAUDE.md` §11a.
+  toy('Toys', HomeSection.toys, beta: true);
+
+  const GameCategory(this.name_, this.section, {this.beta = false});
+
+  /// The category's own name, without any status suffix.
+  final String name_;
+
+  /// Still finding its feet. One flag, one suffix, applied in one place — so a
+  /// second beta section can never drift into a second way of saying it.
+  final bool beta;
+
   final HomeSection section;
+
+  String get label => beta ? '$name_ $kBetaSuffix' : name_;
 }
+
+/// The one way Dally says "this is not finished yet".
+const String kBetaSuffix = '(BETA)';
 
 /// The labelled bands on home, in display order.
 enum HomeSection {
@@ -43,10 +58,15 @@ enum HomeSection {
   words('Word games'),
   mentalMath('Mental math'),
   quickTools('Quick tools'),
-  arcade('Arcade (BETA)');
+  arcade('Arcade', beta: true),
+  toys('Toys', beta: true);
 
-  const HomeSection(this.label);
-  final String label;
+  const HomeSection(this.name_, {this.beta = false});
+
+  final String name_;
+  final bool beta;
+
+  String get label => beta ? '$name_ $kBetaSuffix' : name_;
 }
 
 /// Filter dimension: how many bodies a game needs.

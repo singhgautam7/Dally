@@ -63,6 +63,12 @@ class _PlayLudoScreenState extends ConsumerState<PlayLudoScreen>
 
   /// The token being hopped and the cells it walks through.
   (int, int)? _hopping;
+
+  /// Tokens on their way back to their yard after being captured, and — during
+  /// the first beat only — the square they were taken on. State has already
+  /// sent them home; this is purely how that is drawn.
+  List<(int, int)> _returning = const [];
+  Offset? _returningFrom;
   List<Offset> _hopPath = const [];
 
   /// The seat whose die is mid-roll, or -1. The core has already resolved the
@@ -114,6 +120,8 @@ class _PlayLudoScreenState extends ConsumerState<PlayLudoScreen>
     _recorded = false;
     _captures = 0;
     _hopping = null;
+    _returning = const [];
+    _returningFrom = null;
     _rollTimer?.cancel();
     _rollingSeat = -1;
     _poppedBadge = null;
@@ -201,8 +209,46 @@ class _PlayLudoScreenState extends ConsumerState<PlayLudoScreen>
         _strip = '${widget.config.nameOf(_game.current)}\'s turn — roll';
       }
     });
+    await _playCapture(
+        turn.move.captured, LudoLayout.cellOf(mover, turn.move.to, token));
+    if (!mounted) return;
     await _popBadgeAt(LudoLayout.cellOf(mover, turn.move.to, token));
     if (!turn.playerFinished) _pulseIfWaiting();
+  }
+
+  /// A captured token going home, in the two beats the design asks for:
+  /// **remove** on the square it was taken on, then **appear** in its yard
+  /// slot. 320ms in total, and never a teleport.
+  ///
+  /// The game state is already authoritative — the tokens are at their base
+  /// before this runs — so an interruption (a theme switch, leaving the screen)
+  /// costs the animation and nothing else.
+  Future<void> _playCapture(List<(int, int)> captured, Offset takenOn) async {
+    if (captured.isEmpty) return;
+    if (motionReduced) return; // Reduce Motion: they are simply home already.
+    setState(() {
+      _returning = List.of(captured);
+      _returningFrom = takenOn;
+    });
+    await play(MotionPreset.remove, duration: _captureBeat);
+    if (!mounted) return;
+    setState(() => _returningFrom = null);
+    await play(MotionPreset.appear, duration: _captureBeat);
+    if (!mounted) return;
+    setState(() => _returning = const []);
+  }
+
+  /// Half of the design's 320ms, so the two beats together land on it.
+  static const Duration _captureBeat = Duration(milliseconds: 160);
+
+  /// How much of the captured token is drawn this frame: shrinking out of the
+  /// square it was taken on, then growing into its yard.
+  double get _capturedScale {
+    if (_returning.isEmpty) return 1;
+    if (_returningFrom != null) {
+      return motionPreset == MotionPreset.remove ? 1 - motionEased : 1;
+    }
+    return motionPreset == MotionPreset.appear ? motionEased : 1;
   }
 
   /// A stack that gained or lost a token pops its badge once, after the pin has
@@ -424,6 +470,9 @@ class _PlayLudoScreenState extends ConsumerState<PlayLudoScreen>
                       movable: _movable,
                       animating: _hopping,
                       animatedCell: _animatedCell,
+                      captured: _returning,
+                      capturedAt: _returningFrom,
+                      capturedScale: _capturedScale,
                       pulse: motionPreset == MotionPreset.pulse ? motionEased : 0.5,
                       tokenStyle: tokenStyle,
                       poppedBadge: _poppedBadge,

@@ -17,6 +17,7 @@ class GameTile extends StatelessWidget {
     required this.seats,
     required this.onTap,
     this.best,
+    this.bestIsRecord = true,
   });
 
   final String title;
@@ -26,6 +27,11 @@ class GameTile extends StatelessWidget {
   /// a solo game, which carries no badge at all.
   final PlayerCount? seats;
   final String? best;
+
+  /// Whether [best] is a record ("Best 18 432") or a statement of what the
+  /// entry *is* ("Sandbox"). Only the screen-reader label changes: a toy has no
+  /// best, and announcing one would be a lie.
+  final bool bestIsRecord;
   final VoidCallback onTap;
 
   @override
@@ -33,7 +39,8 @@ class GameTile extends StatelessWidget {
     final t = context.tokens;
     return Semantics(
       button: true,
-      label: '$title. $vibe.${best != null ? ' Best $best.' : ''}',
+      label: '$title. $vibe.'
+          '${best == null ? '' : (bestIsRecord ? ' Best $best.' : ' $best.')}',
       child: Material(
         color: t.surface,
         shape: RoundedRectangleBorder(

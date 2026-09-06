@@ -47,6 +47,55 @@ class _MarkPainter extends CustomPainter {
       old.lightMode != lightMode;
 }
 
+/// One seat, stacked: mark, name and an optional value beneath. The unit
+/// [PlayerStrip] is built from, and the same badge Frog Hop parks in its side
+/// gutters — so a seat looks identical wherever it is shown.
+class PlayerBadge extends StatelessWidget {
+  const PlayerBadge({
+    super.key,
+    required this.identity,
+    required this.name,
+    required this.active,
+    this.value,
+  });
+
+  final PlayerIdentity identity;
+  final String name;
+  final bool active;
+
+  /// Optional mono line under the name (score, tokens home).
+  final String? value;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        PlayerMark(identity: identity, size: 14, dim: !active),
+        const Gap(Insets.s1),
+        Text(
+          name,
+          maxLines: 1,
+          textAlign: TextAlign.center,
+          overflow: TextOverflow.ellipsis,
+          style: DallyType.body.copyWith(
+            fontSize: 12,
+            fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+            color: active ? t.textPrimary : t.textMuted,
+          ),
+        ),
+        if (value != null)
+          Text(value!,
+              maxLines: 1,
+              textAlign: TextAlign.center,
+              style: DallyType.monoChip.copyWith(fontSize: 15, color: t.textPrimary)),
+      ],
+    );
+  }
+}
+
 /// The shared turn/score strip for seat-based games: every player's mark, name
 /// and (optional) trailing value, with the active seat brought forward.
 class PlayerStrip extends StatelessWidget {
@@ -69,31 +118,16 @@ class PlayerStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = context.tokens;
     return Row(
       children: [
         for (var i = 0; i < identities.length; i++) ...[
           if (i > 0) const Gap.h(Insets.s3),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                PlayerMark(identity: identities[i], size: 14, dim: activeIndex != i),
-                const Gap(Insets.s1),
-                Text(
-                  names[i],
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: DallyType.body.copyWith(
-                    fontSize: 12,
-                    fontWeight: activeIndex == i ? FontWeight.w600 : FontWeight.w400,
-                    color: activeIndex == i ? t.textPrimary : t.textMuted,
-                  ),
-                ),
-                if (valueOf != null)
-                  Text(valueOf!(i),
-                      style: DallyType.monoChip.copyWith(fontSize: 15, color: t.textPrimary)),
-              ],
+            child: PlayerBadge(
+              identity: identities[i],
+              name: names[i],
+              active: activeIndex == i,
+              value: valueOf?.call(i),
             ),
           ),
         ],

@@ -1,3 +1,4 @@
+import 'package:dally/core/game/arena_scale.dart';
 import 'package:dally/core/util/dally_random.dart';
 import 'package:dally/features/games/arcade/logic/avoider_core.dart';
 import 'package:dally/features/games/arcade/logic/jumper_core.dart';
@@ -107,7 +108,7 @@ void main() {
       }
       expect(core.justWidened, isTrue);
       expect(core.floors.last.width, greaterThan(narrowed));
-      expect(core.floors.last.width, lessThanOrEqualTo(TowerCore.startWidth));
+      expect(core.floors.last.width, lessThanOrEqualTo(core.startWidth));
     });
 
     test('a miss between perfects resets the run', () {
@@ -119,14 +120,13 @@ void main() {
       expect(core.perfectRun, 0);
     });
 
-    test('sweep speed rises every five floors', () {
+    test('sweep speed rises over a run, on the shared ramp', () {
       final core = TowerCore(arenaWidth: 320)..reset();
       final base = core.speed;
-      for (var i = 0; i < 5; i++) {
-        core.sweepLeft = core.floors.last.left;
-        core.drop();
-      }
+      advance(core.step, 40);
       expect(core.speed, greaterThan(base));
+      expect(core.speed,
+          closeTo(base * arcadeRamp(core.elapsedSeconds, amount: TowerCore.speedRamp), 0.01));
     });
 
     test('the sweep reverses at both walls', () {
@@ -210,9 +210,11 @@ void main() {
     test('the speed curve flattens rather than running away', () {
       final core = RacerCore(rng: DallyRandom.seeded(4), arenaHeight: 560)..reset();
       final early = core.speed;
-      core.distance = 100000;
+      advance(core.step, 600);
       expect(core.speed, greaterThan(early));
-      expect(core.speed, lessThan(600));
+      // The shared ramp is asymptotic: it can never pass its own ceiling.
+      expect(core.speed,
+          lessThanOrEqualTo(RacerCore.speedRef * (1 + RacerCore.speedRamp) + 0.01));
     });
 
     test('the same seed gives the same spawn sequence', () {
@@ -230,7 +232,7 @@ void main() {
 
   group('Avoider', () {
     test('every gap is at least one full jump wide', () {
-      final core = AvoiderCore(rng: DallyRandom.seeded(6), arenaWidth: 320)..reset();
+      final core = AvoiderCore(rng: DallyRandom.seeded(6), arenaWidth: 320, arenaHeight: 470)..reset();
       for (var i = 0; i < 4000; i++) {
         core.step(0.016);
         final xs = core.obstacles.map((o) => o.x).toList()..sort();
@@ -244,18 +246,18 @@ void main() {
     });
 
     test('a jump clears the tallest obstacle', () {
-      final core = AvoiderCore(rng: DallyRandom.seeded(6), arenaWidth: 320)..reset();
+      final core = AvoiderCore(rng: DallyRandom.seeded(6), arenaWidth: 320, arenaHeight: 470)..reset();
       core.jump();
       var peak = 0.0;
       for (var i = 0; i < 100; i++) {
         core.step(0.016);
         if (-core.y > peak) peak = -core.y;
       }
-      expect(peak, greaterThan(AvoiderCore.heights.last));
+      expect(peak, greaterThan(core.heights.last));
     });
 
     test('you cannot double-jump', () {
-      final core = AvoiderCore(rng: DallyRandom.seeded(6), arenaWidth: 320)..reset();
+      final core = AvoiderCore(rng: DallyRandom.seeded(6), arenaWidth: 320, arenaHeight: 470)..reset();
       core.jump();
       core.step(0.016);
       final v = core.velocityY;
@@ -264,7 +266,7 @@ void main() {
     });
 
     test('a metre of score is a real distance, not one arena unit', () {
-      final core = AvoiderCore(rng: DallyRandom.seeded(6), arenaWidth: 320)..reset();
+      final core = AvoiderCore(rng: DallyRandom.seeded(6), arenaWidth: 320, arenaHeight: 470)..reset();
       advance(core.step, 1.0);
       // ~17 m/s, not ~240: the 250 m and 1000 m thresholds have to mean
       // something, so distance is reported in metres, not raw arena units.
@@ -272,7 +274,7 @@ void main() {
     });
 
     test('the landing gap stays in arena units, so it still clears a jump', () {
-      final core = AvoiderCore(rng: DallyRandom.seeded(6), arenaWidth: 320)..reset();
+      final core = AvoiderCore(rng: DallyRandom.seeded(6), arenaWidth: 320, arenaHeight: 470)..reset();
       for (var i = 0; i < 3000; i++) {
         core.step(0.016);
         final xs = core.obstacles.map((o) => o.x).toList()..sort();
@@ -283,16 +285,19 @@ void main() {
       }
     });
 
-    test('speed rises every 250 metres', () {
-      final core = AvoiderCore(rng: DallyRandom.seeded(6), arenaWidth: 320)..reset();
+    test('speed rises over a run, on the shared ramp', () {
+      final core = AvoiderCore(rng: DallyRandom.seeded(6), arenaWidth: 320, arenaHeight: 470)
+        ..reset();
       final base = core.speed;
-      core.distance = 500;
+      advance(core.step, 40);
       expect(core.speed, greaterThan(base));
+      expect(core.speed,
+          closeTo(base * arcadeRamp(core.elapsedSeconds, amount: AvoiderCore.speedRamp), 0.01));
     });
 
     test('the same seed gives the same obstacle heights', () {
       List<double> run(int seed) {
-        final core = AvoiderCore(rng: DallyRandom.seeded(seed), arenaWidth: 320)..reset();
+        final core = AvoiderCore(rng: DallyRandom.seeded(seed), arenaWidth: 320, arenaHeight: 470)..reset();
         for (var i = 0; i < 600; i++) {
           core.step(0.016);
         }

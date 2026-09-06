@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'accents.dart' show contrastRatio;
 import 'palette.dart';
+import 'materials.dart';
 
 /// The token bundle every widget reads via
 /// `Theme.of(context).extension<DallyTokens>()!` (or the [tokens] extension on
@@ -66,6 +67,10 @@ class DallyTokens extends ThemeExtension<DallyTokens> {
 
   /// Fixed Minesweeper digit colours, index 0 == digit 1.
   List<Color> get minesweeperNumbers => palette.minesweeperNumbers;
+
+  /// The Toys material set. Only a toy canvas may read this — see
+  /// `.agents/CLAUDE.md` §11a.4.
+  MaterialPalette get materials => palette.materials;
 
   Color get pieceLight => Palette.pieceLight;
   Color get pieceLightOutline => Palette.pieceLightOutline;

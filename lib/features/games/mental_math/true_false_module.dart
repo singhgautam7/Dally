@@ -8,6 +8,8 @@ import '../../../core/theme/dally_tokens.dart';
 import '../../../core/widgets/game_glyph.dart';
 import '../../../core/widgets/how_to_play.dart';
 import 'ui/play_true_false_screen.dart';
+import 'ui/math_previews.dart';
+import 'ui/setup_math_screen.dart';
 
 /// True / False — twenty statements, wrong ones off by a plausible margin.
 class TrueFalseModule extends GameModule {
@@ -81,8 +83,11 @@ class TrueFalseModule extends GameModule {
   }
 
   @override
-  Widget buildSetupScreen(BuildContext context, WidgetRef ref) =>
-      PlayTrueFalseScreen(module: this);
+  Widget buildSetupScreen(BuildContext context, WidgetRef ref) => SetupMathScreen(
+        module: this,
+        preview: const TrueFalsePreview(),
+        levelCaption: 'How near a wrong answer is to the right one. Two seconds either way.',
+      );
 
   @override
   Widget buildPlayScreen(BuildContext context, WidgetRef ref, GameConfig config) =>

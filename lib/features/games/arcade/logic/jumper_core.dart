@@ -1,5 +1,7 @@
 import 'dart:math' as math;
+import 'dart:ui';
 
+import '../../../../core/game/arena_scale.dart';
 import '../../../../core/util/dally_random.dart';
 
 /// One platform. Coordinates are in arena units: x across the arena width,
@@ -14,8 +16,8 @@ class Platform {
 /// Jumper's simulation. Bouncing is automatic; the only input is left/right.
 ///
 /// **Everything here scales with the arena.** The tuning below is authored
-/// against a reference arena and multiplied by `scale = arenaHeight /
-/// referenceHeight`, so a tablet is the same game at a larger size rather than
+/// against [kReferenceArena] and multiplied by the shared [arenaScale], so a
+/// tablet is the same game at a larger size rather than
 /// a different one. It used to be a set of pixel constants, and the failure
 /// that produced was not subtle: on a large screen the arena grew but the
 /// bounce did not, the horizontal slot for the next platform was drawn from the
@@ -41,10 +43,6 @@ class JumperCore {
   final double arenaWidth;
   final double arenaHeight;
 
-  /// The arena the tuning below is authored against. A 560-tall arena is a
-  /// mid-size phone with the chrome removed.
-  static const double referenceHeight = 560;
-
   // ── Authored tuning, in reference units ──────────────────────────────────
 
   static const double bandGapRef = 78;
@@ -56,9 +54,9 @@ class JumperCore {
   static const double platformWidthRef = 62;
   static const double platformWidthVarianceRef = 24;
 
-  /// How the reference arena maps onto this one. Clamped so a very short or
-  /// very tall arena stays playable rather than turning into a different game.
-  double get scale => (arenaHeight / referenceHeight).clamp(0.6, 2.6);
+  /// How the reference arena maps onto this one — the shared [arenaScale], so
+  /// every arcade game answers to the same factor.
+  double get scale => arenaScale(Size(arenaWidth, arenaHeight));
 
   double get bandGap => bandGapRef * scale;
   double get gravity => gravityRef * scale;
@@ -111,6 +109,7 @@ class JumperCore {
   /// The highest band generated so far, in world units, and where it sits.
   double _topBand = 0;
   double _topBandX = 0;
+  double _topBandWidth = 0;
 
   int get score => height ~/ 10;
 
@@ -127,6 +126,7 @@ class JumperCore {
         x: playerX - startWidth / 2, y: playerY - playerSize, width: startWidth));
     _topBand = playerY - playerSize;
     _topBandX = playerX - startWidth / 2;
+    _topBandWidth = startWidth;
     for (var i = 1; i <= (arenaHeight / bandGap).ceil() + 4; i++) {
       _addBand(playerY - playerSize - i * bandGap);
     }
@@ -139,6 +139,7 @@ class JumperCore {
     if (y < _topBand) {
       _topBand = y;
       _topBandX = x;
+      _topBandWidth = width;
     }
   }
 
@@ -151,9 +152,10 @@ class JumperCore {
   double _reachX(double width) {
     final maxLeft = math.max(0.0, arenaWidth - width);
     if (maxLeft <= 0) return 0;
-    // Both platforms' centres, so the reach is measured between the two things
-    // the player actually stands on.
-    final fromCentre = _topBandX + width / 2;
+    // The centre of the platform being jumped *from* — its own width, not the
+    // new one's. Using the new platform's width put the window off centre by up
+    // to half the width variance, which could place a band beyond reach.
+    final fromCentre = _topBandX + _topBandWidth / 2;
     // The whole budget, and not a pixel more: the design's promise is that the
     // next platform is always in range, so a run is always survivable and never
     // memorised.

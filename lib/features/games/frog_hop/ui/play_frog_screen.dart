@@ -199,8 +199,6 @@ class _PlayFrogScreenState extends ConsumerState<PlayFrogScreen>
     final w = _game.winner;
     if (w != null) {
       _strip = '${widget.config.nameOf(w)} wins';
-    } else if (_game.isDeadlocked) {
-      _strip = 'Neither side can move — a draw';
     } else if (_game.otherSidePassed) {
       // Announced in the strip; there is no Pass button, because there is no
       // choice to make.
@@ -260,9 +258,8 @@ class _PlayFrogScreenState extends ConsumerState<PlayFrogScreen>
       gameId: widget.module.id,
       startedAt: _startedAt,
       durationSeconds: elapsedSeconds,
-      outcome: w == null
-          ? SessionOutcome.drawn
-          : (w == FrogSide.bottom ? SessionOutcome.won : SessionOutcome.lost),
+      // The race has no draw, so `winner` is non-null once it is over.
+      outcome: w == FrogSide.bottom ? SessionOutcome.won : SessionOutcome.lost,
       configLabel: widget.config.configLabel,
       extras: {
         'moves': _game.moves,
@@ -325,53 +322,25 @@ class _PlayFrogScreenState extends ConsumerState<PlayFrogScreen>
       onUndo: _undoMove,
       canUndo: _undo.canUndo && !_over,
       ended: _over,
+      // The race puts its seats in the side gutters beside the lane, so the
+      // status row is empty and the arena keeps the height.
       statusBar: _isPuzzle
           ? _PuzzleStatus(moves: _puzzle!.moves, best: best?.round())
-          : PlayerStrip(
-              identities: _seats,
-              names: widget.config.names,
-              activeIndex: _over ? -1 : _game.turn.index,
-              valueOf: (i) =>
-                  '${_game.homeCount(FrogSide.values[i])} / ${widget.config.perSide} HOME',
+          : const SizedBox.shrink(),
+      board: _isPuzzle
+          ? _lane(t, tokenStyle)
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Seat 0 owns the low end of the lane (screen bottom in
+                // portrait, left in landscape), so its badge sits on the left.
+                Expanded(child: _seatBadge(0)),
+                Expanded(flex: 3, child: _lane(t, tokenStyle)),
+                Expanded(child: _seatBadge(1)),
+              ],
             ),
-      board: LayoutBuilder(
-        builder: (context, constraints) {
-          // The lane fits its long axis first. In landscape it rotates to a
-          // row — the same board with its axis swapped, which is why the
-          // geometry is stored as a single index.
-          final horizontal = constraints.maxWidth > constraints.maxHeight;
-          final fit = fitBoard(
-            available: Size(constraints.maxWidth, constraints.maxHeight),
-            cols: horizontal ? _game.length : 1,
-            rows: horizontal ? 1 : _game.length,
-            floor: 52,
-            cap: 88,
-          );
-          final painter = FrogPainter(
-            game: _game,
-            cell: fit.cell,
-            horizontal: horizontal,
-            identities: _seats,
-            tokenStyle: tokenStyle,
-            selected: _selected,
-            targets: _targets,
-            surfaceAlt: t.surfaceAlt,
-            border: t.border,
-            lightMode: !t.isDark,
-            flight: _flight,
-            shake: _shake,
-          );
-          return GestureDetector(
-            onTapUp: (d) => _tap(painter.indexAt(d.localPosition)),
-            child: SizedBox(
-              width: horizontal ? fit.width : fit.cell,
-              height: horizontal ? fit.cell : fit.height,
-              child: CustomPaint(painter: painter),
-            ),
-          );
-        },
-      ),
       controls: Column(
+
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -396,12 +365,66 @@ class _PlayFrogScreenState extends ConsumerState<PlayFrogScreen>
     );
   }
 
+  Widget _seatBadge(int i) => PlayerBadge(
+        identity: _seats[i],
+        name: widget.config.names[i],
+        active: !_over && _game.turn.index == i,
+        value: '${_game.homeCount(FrogSide.values[i])} / ${widget.config.perSide}',
+      );
+
+  /// The lane itself, sized to whatever box it is handed. In landscape it
+  /// rotates to a row — the same board with its axis swapped, which is why the
+  /// geometry is stored as a single index.
+  Widget _lane(DallyTokens t, PlayerTokenStyle tokenStyle) => LayoutBuilder(
+        builder: (context, constraints) {
+          final horizontal = constraints.maxWidth > constraints.maxHeight;
+          final fit = fitBoard(
+            available: Size(constraints.maxWidth, constraints.maxHeight),
+            cols: horizontal ? _game.length : 1,
+            rows: horizontal ? 1 : _game.length,
+            floor: 52,
+            cap: 120,
+          );
+          // Cells stay square. Spreading them across the width the badges
+          // freed up made them read as bars rather than as places on a board;
+          // the reclaimed space is margin, and the cell grows through the
+          // fitter's cap instead.
+          final painter = FrogPainter(
+            game: _game,
+            cell: fit.cell,
+            horizontal: horizontal,
+            identities: _seats,
+            tokenStyle: tokenStyle,
+            selected: _selected,
+            targets: _targets,
+            surfaceAlt: t.surfaceAlt,
+            border: t.border,
+            lightMode: !t.isDark,
+            flight: _flight,
+            shake: _shake,
+          );
+          // Centred: the slot is wider than the lane, and a bare SizedBox
+          // inside it is pinned to the left by the tight constraints it is
+          // handed.
+          return Center(
+            child: GestureDetector(
+              onTapUp: (d) => _tap(painter.indexAt(d.localPosition)),
+              child: SizedBox(
+                width: horizontal ? fit.width : fit.cell,
+                height: horizontal ? fit.cell : fit.height,
+                child: CustomPaint(painter: painter),
+              ),
+            ),
+          );
+        },
+      );
+
   String _endTitle() {
     if (_isPuzzle) {
       return _puzzle!.isSolved ? 'Solved in ${_puzzle!.moves}' : 'No moves left';
     }
     final w = _game.winner;
-    return w == null ? 'A draw' : '${widget.config.nameOf(w)} wins';
+    return w == null ? '' : '${widget.config.nameOf(w)} wins';
   }
 
   String _endSubtitle() {

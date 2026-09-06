@@ -118,12 +118,24 @@ class _PlayReactionScreenState extends ConsumerState<PlayReactionScreen>
     if (average != null && (_best == 0 || average < _best)) _best = average;
   }
 
-  String get _stateLabel => switch (_core.phase) {
+  /// The quiet line under the arena. It carries the two *waiting* phases only:
+  /// once an attempt is in, the prompt moves onto the board itself, where it
+  /// can actually be seen.
+  String? get _stateLabel => switch (_core.phase) {
         ReactionPhase.waiting => 'Wait for the fill…',
         ReactionPhase.live => 'Now — tap!',
-        ReactionPhase.tooEarly => 'Too early — that attempt is lost. Tap to continue.',
-        ReactionPhase.scored => '${_core.lastAttempt} ms · tap to continue',
+        ReactionPhase.tooEarly || ReactionPhase.scored => null,
       };
+
+  /// True once an attempt has resolved and the next round is one tap away.
+  bool get _awaitingContinue =>
+      _state == ArcadeRunState.running &&
+      (_core.phase == ReactionPhase.tooEarly || _core.phase == ReactionPhase.scored);
+
+  /// What the finished attempt was, shown above the prompt.
+  String get _resultLine => _core.phase == ReactionPhase.tooEarly
+      ? 'Too early'
+      : '${_core.lastAttempt} ms';
 
   @override
   Widget build(BuildContext context) {
@@ -151,16 +163,45 @@ class _PlayReactionScreenState extends ConsumerState<PlayReactionScreen>
       arena: (context, size) => GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTapDown: (_) => _tap(),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 60),
-          color: live ? t.accent : t.surfaceAlt,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 60),
+              color: live ? t.accent : t.surfaceAlt,
+            ),
+            // The prompt belongs on the board, not under it: tinted text below
+            // the arena was where players stopped looking once the arena went
+            // dark, and the round then looked stuck.
+            if (_awaitingContinue)
+              IgnorePointer(
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_resultLine,
+                          style: DallyType.monoLg
+                              .copyWith(fontSize: 34, color: t.textPrimary)),
+                      const Gap(Insets.s3),
+                      Text('TAP TO CONTINUE',
+                          textAlign: TextAlign.center,
+                          style: DallyType.label.copyWith(
+                            fontSize: 12,
+                            letterSpacing: 1.6,
+                            color: t.textMuted,
+                          )),
+                    ],
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
       footer: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (_state == ArcadeRunState.running)
-            Text(_stateLabel,
+          if (_state == ArcadeRunState.running && _stateLabel != null)
+            Text(_stateLabel!,
                 textAlign: TextAlign.center,
                 style: DallyType.body.copyWith(fontSize: 14, color: t.textMuted)),
           const Gap(Insets.s2),

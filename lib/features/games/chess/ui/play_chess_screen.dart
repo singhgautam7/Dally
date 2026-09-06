@@ -22,6 +22,7 @@ import '../../../../core/widgets/game_scaffold.dart';
 import '../../../../core/widgets/pause_sheet.dart';
 import '../../../../core/widgets/style_picker_sheet.dart';
 import '../chess_config.dart';
+import '../logic/chess_moves.dart';
 import 'chess_pieces.dart';
 import 'chess_pause_extras.dart';
 import 'chess_save.dart';
@@ -46,7 +47,12 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen>
   bool _reduceMotion = false;
 
   /// The move currently sliding across the board, and what it took.
-  (Square, Square)? _slide;
+  /// The moves currently animating. One for an ordinary move; two for a
+  /// castle, so the rook travels with its king instead of teleporting.
+  List<(Square, Square)> _slides = const [];
+
+  /// Where the taken piece is drawn shrinking out, when there is one.
+  Square? _takenAt;
   Piece? _taken;
 
   /// The king's square while it shakes for being in check.
@@ -56,6 +62,10 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen>
   final List<String> _history = [];
   Square? _sel;
   SquareSet _targets = SquareSet.empty;
+
+  /// What the board *draws*. Same as [_targets] except for a castling king —
+  /// see [_markersFor].
+  SquareSet _markers = SquareSet.empty;
   (Square, Square)? _last;
   (Square, Square)? _promo;
   late bool _p1White;
@@ -229,11 +239,14 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen>
       setState(() {
         _sel = sq;
         _targets = _pos.legalMovesOf(sq);
+        _markers = castlingAwareMarkers(
+            legal: _targets, from: sq, isKing: piece.role == Role.king);
       });
     } else {
       setState(() {
         _sel = null;
         _targets = SquareSet.empty;
+        _markers = SquareSet.empty;
       });
     }
   }
@@ -255,19 +268,29 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen>
     // occupant is a castle, not a capture, and nothing should fade.
     final mover = _pos.board.pieceAt(from);
     final occupant = _pos.board.pieceAt(to);
+    final castling = isCastling(_pos.board, from, to);
     final taken = (occupant != null && mover != null && occupant.color != mover.color)
         ? occupant
         : null;
+    // A castle moves two pieces, so it animates two. Both land where the rules
+    // put them: king to the g- or c-file, rook to the square it jumped over.
+    final slides = castling
+        ? castlingSlides(kingFrom: from, rookFrom: to)
+        : <(Square, Square)>[(from, to)];
     if (!_clockStarted) _startClock();
     setState(() {
       _pos = _pos.play(move);
       _history.add(san);
-      _last = (from, to);
       _sel = null;
       _targets = SquareSet.empty;
+      _markers = SquareSet.empty;
       _promo = null;
-      _slide = (from, to);
+      _slides = slides;
+      _takenAt = taken == null ? null : to;
       _taken = taken;
+      // The last-move tint follows where the king really went, not the rook
+      // square the encoding names.
+      _last = (slides.first.$1, slides.first.$2);
     });
     Haptics.medium(ref);
     _persist();
@@ -278,8 +301,9 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen>
     play(MotionPreset.move).then((_) {
       if (!mounted) return;
       setState(() {
-        _slide = null;
+        _slides = const [];
         _taken = null;
+        _takenAt = null;
       });
       if (_pos.isCheck && !_pos.isGameOver) {
         _checkShake = _pos.board.kingOf(_pos.turn);
@@ -333,6 +357,13 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen>
   String _san(Position pos, NormalMove move) {
     final piece = pos.board.pieceAt(move.from);
     if (piece == null) return '';
+    if (isCastling(pos.board, move.from, move.to)) {
+      final s = castlingSan(kingFrom: move.from, rookFrom: move.to);
+      final next = pos.play(move);
+      if (next.isCheckmate) return '$s#';
+      if (next.isCheck) return '$s+';
+      return s;
+    }
     final dest = _algebraic(move.to);
     final capture = pos.board.pieceAt(move.to) != null ||
         (piece.role == Role.pawn && _fileOf(move.from) != _fileOf(move.to));
@@ -389,6 +420,7 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen>
       _history.clear();
       _sel = null;
       _targets = SquareSet.empty;
+      _markers = SquareSet.empty;
       _last = null;
       _promo = null;
       _outcomeText = null;
@@ -437,6 +469,14 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen>
   Future<void> _confirmExit() =>
       leaveGame(context, ended: _outcomeText != null, progressSaved: false);
 
+  /// The board's own gutter — a hairline rather than the screen's, so the
+  /// board reaches the edges the way a physical set does.
+  static const double _boardInset = 3;
+
+  /// One number for both player bars, so the space above the board and the
+  /// space below it can never drift apart.
+  static const double _barGap = Insets.s3;
+
   @override
   Widget build(BuildContext context) {
     final style = pieceStyleFromId(
@@ -446,64 +486,91 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen>
     final bottomSide = _flipped ? Side.black : Side.white;
     final mat = _material(_pos);
 
+    _PlayerBar bar(Side side) => _PlayerBar(
+          side: side,
+          p1White: _p1White,
+          captured: side == Side.white ? mat.byWhite : mat.byBlack,
+          style: style,
+          clockMs: _hasClock ? (side == Side.white ? _whiteMs : _blackMs) : null,
+          active: _outcomeText == null && _pos.turn == side,
+        );
+
     return GameScaffold(
       onOverflow: _openPause,
       ended: _outcomeText != null,
       progressSaved: false,
-      statusBar: _PlayerBar(
-        side: topSide,
-        p1White: _p1White,
-        captured: topSide == Side.white ? mat.byWhite : mat.byBlack,
-        style: style,
-        clockMs: _hasClock ? (topSide == Side.white ? _whiteMs : _blackMs) : null,
-        active: _outcomeText == null && _pos.turn == topSide,
-      ),
+      // A near-full-width board: every square stays a comfortable target, and
+      // the shared gutter would cost eight squares a fifth of their width.
+      boardInset: _boardInset,
+      // Both player bars live with the board rather than one of them sitting in
+      // the shared status slot — that is what makes the gap above the board and
+      // the gap below it the same number instead of two different ones. The
+      // slot is left null so its gaps are not reserved either.
+      //
+      // The move list is the exception: it belongs at the top, under the
+      // overflow, where a glance finds it without leaving the board.
+      statusBar: _MoveHistoryStrip(history: _history, materialDiff: mat.diff),
       board: LayoutBuilder(
         builder: (context, c) {
-          // The board takes whatever the bar under it leaves, rather than
-          // guessing at 86% of the height: on a 320×568 phone that guess was
-          // 10px short and the column overflowed.
-          final s = math.min(c.maxWidth, c.maxHeight);
+          // `heightFactor: 1` is what keeps the bars close to the board: an
+          // ordinary Center expands to the whole flexible slot and spreads the
+          // leftover height between the bars and the board — 77px on a tall
+          // phone. Shrink-wrapping the square puts that slack outside the
+          // group, where it belongs, and leaves the gaps at [_barGap].
+          final board = Align(
+            heightFactor: 1,
+            child: AspectRatio(
+              aspectRatio: 1,
+              child: _Board(
+                pos: _pos,
+                style: style,
+                sel: _sel,
+                targets: _markers,
+                last: _last,
+                legalDots: widget.config.legalDots,
+                rotatedSide: _rotatedSide,
+                screenOf: _screen,
+                squareAt: _squareAt,
+                onTap: _tap,
+                slides: _slides,
+                taken: _taken,
+                takenAt: _takenAt,
+                slideProgress:
+                    motionPreset == MotionPreset.move ? motionEased : 1,
+                checkShake: _checkShake,
+                shakeOffset: motionPreset == MotionPreset.shake
+                    ? motionEased.shakeOffset(amplitude: 5)
+                    : 0,
+              ),
+            ),
+          );
+
+          // Landscape moves the chrome from above the board to beside it
+          // (`.agents/CLAUDE.md` §10). Stacked, two player bars plus the top
+          // chrome left an 85px board on an 844×390 screen — technically
+          // unclipped, and unplayable.
+          if (c.maxWidth > c.maxHeight) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(child: bar(topSide)),
+                const Gap.h(_barGap),
+                board,
+                const Gap.h(_barGap),
+                Expanded(child: bar(bottomSide)),
+              ],
+            );
+          }
+
           return Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Flexible(
-                child: AspectRatio(
-                aspectRatio: 1,
-                child: _Board(
-                  pos: _pos,
-                  style: style,
-                  sel: _sel,
-                  targets: _targets,
-                  last: _last,
-                  legalDots: widget.config.legalDots,
-                  rotatedSide: _rotatedSide,
-                  screenOf: _screen,
-                  squareAt: _squareAt,
-                  onTap: _tap,
-                  slide: _slide,
-                  slideProgress:
-                      motionPreset == MotionPreset.move ? motionEased : 1,
-                  taken: _taken,
-                  checkShake: _checkShake,
-                  shakeOffset: motionPreset == MotionPreset.shake
-                      ? motionEased.shakeOffset(amplitude: 5)
-                      : 0,
-                ),
-                ),
-              ),
-              const Gap(Insets.s3),
-              SizedBox(
-                width: s,
-                child: _PlayerBar(
-                  side: bottomSide,
-                  p1White: _p1White,
-                  captured: bottomSide == Side.white ? mat.byWhite : mat.byBlack,
-                  style: style,
-                  clockMs: _hasClock ? (bottomSide == Side.white ? _whiteMs : _blackMs) : null,
-                  active: _outcomeText == null && _pos.turn == bottomSide,
-                ),
-              ),
+              bar(topSide),
+              const Gap(_barGap),
+              Flexible(child: board),
+              const Gap(_barGap),
+              bar(bottomSide),
             ],
           );
         },
@@ -526,8 +593,7 @@ class _PlayChessScreenState extends ConsumerState<PlayChessScreen>
                       onSecondary: () => leaveGame(context, ended: true),
                     )
                   : _BottomStatus(
-                      pos: _pos, outcome: _outcomeText, config: widget.config.label,
-                      history: _history, materialDiff: mat.diff),
+                      pos: _pos, outcome: _outcomeText, config: widget.config.label),
             ),
     );
   }
@@ -646,15 +712,11 @@ class _BottomStatus extends StatelessWidget {
     required this.pos,
     required this.outcome,
     required this.config,
-    required this.history,
-    required this.materialDiff,
   });
 
   final Position pos;
   final String? outcome;
   final String config;
-  final List<String> history;
-  final int materialDiff;
 
   @override
   Widget build(BuildContext context) {
@@ -663,7 +725,6 @@ class _BottomStatus extends StatelessWidget {
         (pos.isCheck
             ? '${pos.turn == Side.white ? 'White' : 'Black'} in check'
             : '${pos.turn == Side.white ? 'White' : 'Black'} to move');
-    final tag = materialDiff == 0 ? '+0' : (materialDiff > 0 ? '+$materialDiff W' : '+${-materialDiff} B');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
@@ -685,52 +746,73 @@ class _BottomStatus extends StatelessWidget {
             Text(config, style: DallyType.body.copyWith(fontSize: 12, color: t.textFaint)),
           ],
         ),
-        const Gap(Insets.s3),
-        Container(
-          height: 44,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: t.surface,
-            borderRadius: Radii.containerBR,
-            border: t.surfaceNeedsOutline ? Border.all(color: t.border) : null,
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: history.isEmpty
-                    ? Text('No moves yet',
-                        style: DallyType.monoSm.copyWith(fontSize: 12, color: t.textFaint))
-                    : ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        reverse: true,
-                        itemCount: _pairs(history).length,
-                        itemBuilder: (context, i) {
-                          final pairs = _pairs(history);
-                          return Center(
-                            child: Padding(
-                              padding: const EdgeInsets.only(left: Insets.s3),
-                              child: Text(pairs[pairs.length - 1 - i],
-                                  style: DallyType.monoSm.copyWith(fontSize: 12, color: t.textMuted)),
-                            ),
-                          );
-                        },
-                      ),
-              ),
-              const Gap.h(Insets.s2),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                decoration: BoxDecoration(
-                    color: t.surfaceAlt, borderRadius: Radii.pillBR),
-                child: Text(tag, style: DallyType.monoSm.copyWith(fontSize: 11, color: t.textMuted)),
-              ),
-            ],
-          ),
-        ),
       ],
     );
   }
 
-  List<String> _pairs(List<String> history) {
+}
+
+/// The move list, parked at the top of the screen under the overflow — a glance
+/// away from the board rather than a look down past the player bar.
+class _MoveHistoryStrip extends StatelessWidget {
+  const _MoveHistoryStrip({required this.history, required this.materialDiff});
+
+  final List<String> history;
+  final int materialDiff;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    final tag = materialDiff == 0
+        ? '+0'
+        : (materialDiff > 0 ? '+$materialDiff W' : '+${-materialDiff} B');
+    final pairs = _pairs(history);
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: t.surface,
+        borderRadius: Radii.containerBR,
+        border: t.surfaceNeedsOutline ? Border.all(color: t.border) : null,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: pairs.isEmpty
+                ? Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('No moves yet',
+                        style: DallyType.monoSm
+                            .copyWith(fontSize: 12, color: t.textFaint)),
+                  )
+                : ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    reverse: true,
+                    itemCount: pairs.length,
+                    itemBuilder: (context, i) => Center(
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: Insets.s3),
+                        child: Text(pairs[pairs.length - 1 - i],
+                            style: DallyType.monoSm
+                                .copyWith(fontSize: 12, color: t.textMuted)),
+                      ),
+                    ),
+                  ),
+          ),
+          const Gap.h(Insets.s2),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+            decoration:
+                BoxDecoration(color: t.surfaceAlt, borderRadius: Radii.pillBR),
+            child: Text(tag,
+                style: DallyType.monoSm.copyWith(fontSize: 11, color: t.textMuted)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static List<String> _pairs(List<String> history) {
     final pairs = <String>[];
     for (var i = 0; i < history.length; i += 2) {
       final white = history[i];
@@ -755,9 +837,10 @@ class _Board extends StatelessWidget {
     required this.screenOf,
     required this.squareAt,
     required this.onTap,
-    required this.slide,
+    required this.slides,
     required this.slideProgress,
     required this.taken,
+    required this.takenAt,
     required this.checkShake,
     required this.shakeOffset,
   });
@@ -776,14 +859,18 @@ class _Board extends StatelessWidget {
   final Square Function(int, int) squareAt;
   final ValueChanged<Square> onTap;
 
-  /// The move in flight, `(from, to)`, or null. The moved piece is already at
-  /// `to` in [pos]; it is *drawn* back toward `from` by `1 - slideProgress`.
-  final (Square, Square)? slide;
+  /// The moves in flight, each `(from, to)`. A piece is already at `to` in
+  /// [pos]; it is *drawn* back toward `from` by `1 - slideProgress`.
+  ///
+  /// Usually one. A castle is two — the king and the rook travel together, and
+  /// before v6 both simply appeared on their new squares.
+  final List<(Square, Square)> slides;
   final double slideProgress;
 
-  /// The piece being taken, drawn shrinking at the destination under the
+  /// The piece being taken and the square it is drawn shrinking on, under the
   /// arriving one.
   final Piece? taken;
+  final Square? takenAt;
 
   final Square? checkShake;
   final double shakeOffset;
@@ -808,8 +895,8 @@ class _Board extends StatelessWidget {
                   for (var col = 0; col < 8; col++)
                     _squareTile(t, col, row, cell, checkSquare),
                 // The piece being taken, under the one arriving on top of it.
-                if (taken != null && slide != null)
-                  _pieceTile(slide!.$2, taken!, cell,
+                if (taken != null && takenAt != null)
+                  _pieceTile(takenAt!, taken!, cell,
                       scale: 1 - slideProgress, ignoreSlide: true),
                 // Pieces.
                 for (final (sq, piece) in pos.board.pieces)
@@ -858,11 +945,16 @@ class _Board extends StatelessWidget {
   }) {
     final (col, row) = screenOf(sq);
     var offset = Offset.zero;
-    final move = slide;
-    if (!ignoreSlide && move != null && sq == move.$2 && slideProgress < 1) {
-      final (fromCol, fromRow) = screenOf(move.$1);
-      offset = Offset((fromCol - col) * cell, (fromRow - row) * cell) *
-          (1 - slideProgress);
+    if (!ignoreSlide && slideProgress < 1) {
+      for (final move in slides) {
+        if (move.$2 != sq) continue;
+        final (fromCol, fromRow) = screenOf(move.$1);
+        offset = slideOffset(
+            from: Offset(fromCol * cell, fromRow * cell),
+            to: Offset(col * cell, row * cell),
+            progress: slideProgress);
+        break;
+      }
     }
     if (sq == checkShake) offset += Offset(shakeOffset, 0);
     Widget glyph = PieceGlyph(piece: piece, style: style, size: cell);

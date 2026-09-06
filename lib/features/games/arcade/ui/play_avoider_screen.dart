@@ -57,7 +57,11 @@ class _PlayAvoiderScreenState extends ConsumerState<PlayAvoiderScreen>
   void _ensureCore(Size size) {
     if (_core != null && _arena == size) return;
     _arena = size;
-    _core = AvoiderCore(rng: ref.read(randomProvider), arenaWidth: size.width)..reset();
+    _core = AvoiderCore(
+      rng: ref.read(randomProvider),
+      arenaWidth: size.width,
+      arenaHeight: size.height,
+    )..reset();
   }
 
   @override

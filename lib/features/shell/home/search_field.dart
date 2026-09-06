@@ -10,6 +10,7 @@ import '../../../core/widgets/dally_empty_state.dart';
 import '../../../core/widgets/filter_chip_pill.dart';
 import '../../../core/widgets/game_tile.dart';
 import 'home_filter.dart';
+import '../../../core/widgets/dally_tooltip.dart';
 
 /// The 42px search pill plus Cancel, replacing the top bar in search mode. The
 /// grid stays in place behind it; Cancel restores the bar and any prior filter.
@@ -83,13 +84,16 @@ class _SearchBarRowState extends ConsumerState<SearchBarRow> {
                   Semantics(
                     button: true,
                     label: 'Clear search',
-                    child: GestureDetector(
-                      onTap: () {
-                        _controller.clear();
-                        ref.read(searchQueryProvider.notifier).clear();
-                        setState(() {});
-                      },
-                      child: Icon(Icons.close_rounded, size: 18, color: t.textMuted),
+                    child: DallyTooltip(
+                      message: 'Clear search',
+                      child: GestureDetector(
+                        onTap: () {
+                          _controller.clear();
+                          ref.read(searchQueryProvider.notifier).clear();
+                          setState(() {});
+                        },
+                        child: Icon(Icons.close_rounded, size: 18, color: t.textMuted),
+                      ),
                     ),
                   ),
               ],
