@@ -92,4 +92,48 @@ void main() {
       expect(steps, 0);
     });
   });
+
+  group('alpha — the sub-step progress a render interpolates on', () {
+    // Snake slides its body between two grid cells using this. It must come
+    // from the accumulated *simulation* time, never from a wall clock, or the
+    // slide stutters at a frame rate the loop was not tuned for.
+
+    test('is the fraction of one fixed step banked so far', () {
+      final loop = FixedStepLoop(step: const Duration(milliseconds: 100), onStep: (_) {});
+      expect(loop.alpha, 0);
+      loop.feed(const Duration(milliseconds: 25));
+      expect(loop.alpha, closeTo(0.25, 1e-9));
+      loop.feed(const Duration(milliseconds: 50));
+      expect(loop.alpha, closeTo(0.75, 1e-9));
+      // Crossing a whole step drains it and leaves the remainder.
+      loop.feed(const Duration(milliseconds: 50));
+      expect(loop.alpha, closeTo(0.25, 1e-9));
+    });
+
+    test('the same wall time in different frame sizes lands on the same alpha',
+        () {
+      double alphaAfter(Duration frame, int frames) {
+        final loop = FixedStepLoop(step: const Duration(milliseconds: 16), onStep: (_) {});
+        for (var i = 0; i < frames; i++) {
+          loop.feed(frame);
+        }
+        return loop.alpha;
+      }
+
+      // 240ms of run at 60, 120 and 240 Hz.
+      final at60 = alphaAfter(const Duration(microseconds: 16667), 15);
+      final at120 = alphaAfter(const Duration(microseconds: 8333), 30);
+      final at240 = alphaAfter(const Duration(microseconds: 4167), 60);
+      expect(at60, closeTo(at120, 0.02));
+      expect(at60, closeTo(at240, 0.02));
+    });
+
+    test('never leaves the 0…1 range a lerp can use', () {
+      final loop = FixedStepLoop(step: const Duration(milliseconds: 16), onStep: (_) {});
+      for (final ms in [0, 1, 15, 16, 17, 100, 5000]) {
+        loop.feed(Duration(milliseconds: ms));
+        expect(loop.alpha, inInclusiveRange(0, 1), reason: 'after ${ms}ms');
+      }
+    });
+  });
 }

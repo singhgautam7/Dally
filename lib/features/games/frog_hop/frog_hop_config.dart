@@ -4,8 +4,14 @@ import 'logic/frog_hop.dart';
 /// Race (two players, pass and play) or Puzzle (one player, no turn order).
 enum FrogMode { race, puzzle }
 
+/// Pieces a side. One length now: the longer lanes made a race a chore and the
+/// puzzle's minimum climbs as `n² + 2n`, which is a different game by five.
+const int kPerSide = 3;
+
 extension FrogModeX on FrogMode {
-  String get label => this == FrogMode.race ? 'Race' : 'Puzzle';
+  /// The seat count rides in the label: it is the thing that actually decides
+  /// which mode someone wants, and the caption underneath is easy to skip.
+  String get label => this == FrogMode.race ? 'Race (2P)' : 'Puzzle (1P)';
   String get caption =>
       this == FrogMode.race ? 'Two players' : 'Swap the sides on your own';
 }
@@ -19,7 +25,11 @@ class FrogHopConfig extends GameConfig {
     this.first = FrogSide.bottom,
   });
 
-  /// Pieces a side: 3, 4 or 5. The lane is `perSide * 2 + gaps` cells.
+  /// Pieces a side. The lane is `perSide * 2 + gaps` cells.
+  ///
+  /// Always [kPerSide] now — the four- and five-a-side lanes are gone. It stays
+  /// on the config because it is part of the stat key and the core's shape, so
+  /// records written against the longer lanes still read back.
   final int perSide;
 
   final FrogMode mode;

@@ -27,6 +27,8 @@ class FrogPainter extends CustomPainter {
   });
 
   final FrogHopGame game;
+
+  /// One cell, both ways: the lane's squares stay square.
   final double cell;
 
   /// True in landscape, where the lane runs left-to-right.

@@ -31,10 +31,11 @@ class FrogMove {
 /// Frog Hop — a race down one lane.
 ///
 /// Each side starts [perSide] pieces at its own end with a single empty cell
-/// between the two blocks. A piece **steps** into the empty cell directly ahead
-/// of it, or **jumps** over exactly one occupied neighbour — either colour —
-/// into the empty cell beyond. Nothing moves backwards, nothing is captured,
-/// and a jump is never forced. The first side to fill the opposite end wins.
+/// between the two blocks. A piece **steps** into an adjacent empty cell, or
+/// **jumps** over exactly one occupied neighbour — either colour — into the
+/// empty cell beyond. In the race both directions are legal ([allowBackward]);
+/// nothing is captured and a jump is never forced. The first side to fill the
+/// opposite end wins, and there is no draw.
 ///
 /// Pure rules: no widgets, no clock, no randomness. The lane is a single list
 /// of cells, so the geometry is one index and a rotation to landscape is a
@@ -43,6 +44,7 @@ class FrogHopGame {
   FrogHopGame({
     required this.perSide,
     this.gaps = 1,
+    this.allowBackward = true,
     FrogSide first = FrogSide.bottom,
   })  : assert(perSide >= 1),
         assert(gaps >= 1),
@@ -54,18 +56,23 @@ class FrogHopGame {
   /// Empty cells between the two blocks at the deal.
   ///
   /// The **puzzle** uses one, which is what makes `n² + 2n` the minimum. The
-  /// **race** uses three, and that is not decoration: on a one-gap lane a race
-  /// is unwinnable and usually one-sided. Walking the whole reachable state
-  /// space (`test/games/frog_hop_test.dart`) finds *zero* winning positions at
-  /// one or two gaps for every lane size, because filling your own home there
-  /// forces the other side into theirs at the same instant — and worse, a
-  /// single move can wall the other side out of the lane for the rest of the
-  /// game. Three gaps is the first width at which one side can finish before
-  /// the other, and at which both sides always have something to play.
+  /// **race** uses three, for room rather than for legality: with
+  /// [allowBackward] every lane width is winnable, but a one-gap race is
+  /// cramped and routinely one-sided, and three is the first width at which
+  /// both sides always have something worth playing.
   final int gaps;
 
   /// Pieces a side. 3 is the default; 4 and 5 are the longer games.
   final int perSide;
+
+  /// Whether a piece may step or jump *away* from its home end.
+  ///
+  /// True for the race, and it is what removes the draw: forward-only, a lane
+  /// could wall both sides in with nothing to play. Backward-legal, every empty
+  /// cell on a connected lane has an occupied neighbour that can move into it,
+  /// so a position with no move at all does not exist and the race can only end
+  /// in a win. False for [FrogPuzzle], where forward-only *is* the puzzle.
+  final bool allowBackward;
 
   final List<FrogSide?> _cells;
   FrogSide _turn;
@@ -92,8 +99,8 @@ class FrogHopGame {
     }
   }
 
-  /// Bottom travels toward the high end, top toward the low end. Nothing ever
-  /// moves the other way, which is what makes the game finite.
+  /// Bottom's home is the high end, top's the low end. This is the direction a
+  /// side is racing in; with [allowBackward] a piece may also retreat.
   static int direction(FrogSide side) => side == FrogSide.bottom ? 1 : -1;
 
   /// The cells a side has to fill to win: the far [perSide] cells.
@@ -120,34 +127,30 @@ class FrogHopGame {
     return null;
   }
 
-  bool get isOver => winner != null || isDeadlocked;
-
-  /// Neither side can move — possible only when both are blocked, which ends
-  /// the race as a draw.
-  bool get isDeadlocked =>
-      winner == null &&
-      movesFor(FrogSide.bottom).isEmpty &&
-      movesFor(FrogSide.top).isEmpty;
+  /// The race ends on a win and on nothing else. There is deliberately no
+  /// deadlock and no draw: see [allowBackward].
+  bool get isOver => winner != null;
 
   /// The legal moves for the piece at [index], or empty when there is no piece
   /// there, it belongs to the other side, or it is blocked.
   List<FrogMove> movesFrom(int index) {
     final side = _cells[index];
     if (side == null) return const [];
-    final d = direction(side);
     final out = <FrogMove>[];
-    final ahead = index + d;
-    if (ahead >= 0 && ahead < length && _cells[ahead] == null) {
-      out.add(FrogMove(from: index, to: ahead, kind: FrogMoveKind.step));
-    }
-    final beyond = index + 2 * d;
-    // A jump needs exactly one occupied neighbour — **of the other side** — and
-    // an empty cell beyond it.
-    if (beyond >= 0 &&
-        beyond < length &&
-        _cells[ahead] != null &&
-        _cells[beyond] == null) {
-      out.add(FrogMove(from: index, to: beyond, kind: FrogMoveKind.jump));
+    final forward = direction(side);
+    for (final d in allowBackward ? [forward, -forward] : [forward]) {
+      final ahead = index + d;
+      if (ahead < 0 || ahead >= length) continue;
+      if (_cells[ahead] == null) {
+        out.add(FrogMove(from: index, to: ahead, kind: FrogMoveKind.step));
+        continue;
+      }
+      // A jump needs exactly one occupied neighbour — either colour — and an
+      // empty cell beyond it.
+      final beyond = index + 2 * d;
+      if (beyond >= 0 && beyond < length && _cells[beyond] == null) {
+        out.add(FrogMove(from: index, to: beyond, kind: FrogMoveKind.jump));
+      }
     }
     return out;
   }
@@ -194,12 +197,9 @@ class FrogHopGame {
       _turn = other;
       return;
     }
-    if (movesFor(_turn).isEmpty) {
-      // Neither side can move: the lane is deadlocked and the race is a draw.
-      return;
-    }
     // The other side has nothing to play, so it passes and the turn stays put.
-    _passed = true;
+    // Both sides blocked is unreachable — see [allowBackward].
+    _passed = movesFor(_turn).isNotEmpty;
   }
 
   /// True when the last move left the *other* side with nothing to play, so it
@@ -255,7 +255,8 @@ class FrogSnapshot {
 /// in any order, and the goal is to swap them — every bottom piece into the top
 /// end and back. The minimum is `n² + 2n` moves (15 for three a side).
 class FrogPuzzle {
-  FrogPuzzle({required this.perSide}) : game = FrogHopGame(perSide: perSide);
+  FrogPuzzle({required this.perSide})
+      : game = FrogHopGame(perSide: perSide, allowBackward: false);
 
   final int perSide;
   final FrogHopGame game;

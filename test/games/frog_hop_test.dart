@@ -79,11 +79,34 @@ void main() {
       ]);
     });
 
-    test('nothing moves backwards', () {
+    test('the race lets a piece move backwards', () {
+      // The v5 fix: forward-only was what deadlocked the lane into a draw.
       final g = FrogHopGame(perSide: 3);
       g.play(const FrogMove(from: 2, to: 3, kind: FrogMoveKind.step));
-      // Bottom's piece is now at 3 and cell 2 is empty — but it cannot go back.
-      expect(g.movesFrom(3).every((m) => m.to > 3), isTrue);
+      // Bottom's piece is at 3 and cell 2 is empty behind it — it may go back.
+      expect(g.movesFrom(3),
+          contains(const FrogMove(from: 3, to: 2, kind: FrogMoveKind.step)));
+    });
+
+    test('the puzzle is still forward-only', () {
+      // Backward moves would make the leapfrog puzzle trivial, so the solo
+      // variant keeps the old rule.
+      final p = FrogPuzzle(perSide: 3);
+      p.play(const FrogMove(from: 2, to: 3, kind: FrogMoveKind.step));
+      expect(p.game.movesFrom(3).every((m) => m.to > 3), isTrue);
+    });
+
+    test('a backward jump is legal too', () {
+      final g = FrogHopGame(perSide: 3);
+      // Walk the lane to B B . T B T T with bottom to play.
+      g.play(const FrogMove(from: 2, to: 3, kind: FrogMoveKind.step));
+      g.play(const FrogMove(from: 4, to: 2, kind: FrogMoveKind.jump));
+      g.play(const FrogMove(from: 3, to: 4, kind: FrogMoveKind.step));
+      g.play(const FrogMove(from: 2, to: 3, kind: FrogMoveKind.step));
+      expect(g.turn, FrogSide.bottom);
+      // Bottom's piece at 4 jumps *backwards* over top's 3 into the empty 2.
+      expect(g.movesFrom(4),
+          contains(const FrogMove(from: 4, to: 2, kind: FrogMoveKind.jump)));
     });
 
     test('a jump over two pieces is not a move', () {
@@ -189,19 +212,61 @@ void main() {
       expect(g.homeCount(FrogSide.top), 1, reason: 'cell 2 is one of top\'s home cells');
     });
 
-    test('a full race from the start terminates and someone wins or it draws', () {
-      // Drive the lane with a fixed policy — jumps first, then steps — which is
-      // deterministic and needs no RNG.
-      final g = FrogHopGame(perSide: 3);
-      var guard = 0;
-      while (!g.isOver && guard++ < 200) {
-        final moves = g.legalMoves;
-        if (moves.isEmpty) break;
-        final jump = moves.where((m) => m.kind == FrogMoveKind.jump).firstOrNull;
-        g.play(jump ?? moves.first);
+    test('every reachable position can still reach a win', () {
+      // The v5 proof, and the one that retires the draw. Walk the whole
+      // reachable state space, then take a fixpoint over "can reach a win".
+      // Forward-only, positions existed with no move at all (the draw); with
+      // backward moves legal, *every* reachable position has a path to a win.
+      for (final gaps in [1, 3]) {
+        final start = FrogHopGame(perSide: 3, gaps: gaps);
+        String key(FrogHopGame g) =>
+            [for (var i = 0; i < g.length; i++) g.at(i)?.name[0] ?? '.'].join() +
+            g.turn.name[0];
+
+        final scratch = FrogHopGame(perSide: 3, gaps: gaps);
+        final all = <String, FrogSnapshot>{};
+        final seen = <String>{key(start)};
+        final queue = <FrogSnapshot>[start.snapshot()];
+        while (queue.isNotEmpty) {
+          final s = queue.removeAt(0);
+          scratch.restore(s);
+          all[key(scratch)] = s;
+          if (scratch.winner != null) continue;
+          expect(scratch.legalMoves, isNotEmpty,
+              reason: 'no reachable position may be a deadlock');
+          for (final m in scratch.legalMoves) {
+            scratch.restore(s);
+            scratch.play(m);
+            if (seen.add(key(scratch))) queue.add(scratch.snapshot());
+          }
+        }
+
+        final canWin = <String>{};
+        var changed = true;
+        while (changed) {
+          changed = false;
+          for (final e in all.entries) {
+            if (canWin.contains(e.key)) continue;
+            scratch.restore(e.value);
+            if (scratch.winner != null) {
+              canWin.add(e.key);
+              changed = true;
+              continue;
+            }
+            for (final m in scratch.legalMoves) {
+              scratch.restore(e.value);
+              scratch.play(m);
+              if (canWin.contains(key(scratch))) {
+                canWin.add(e.key);
+                changed = true;
+                break;
+              }
+            }
+          }
+        }
+        expect(canWin.length, all.length,
+            reason: 'gaps=$gaps: every position must have a path to a win');
       }
-      expect(g.isOver, isTrue, reason: 'the race must terminate');
-      expect(guard, lessThan(200));
     });
   });
 
@@ -302,15 +367,17 @@ void main() {
     }
 
     for (final n in [3, 4, 5]) {
-      test('$n a side: a one-gap lane cannot be won by anybody', () {
-        // Filling your own home on a one-gap lane forces the other side into
-        // theirs at the same instant, so "first side home" has no meaning —
-        // and a single move can wall the other side out entirely.
-        expect(explore(n, 1).wins, 0);
+      test('$n a side: even a one-gap lane resolves to a win', () {
+        // Forward-only, a one-gap lane could not be won at all — that was the
+        // deadlock the draw existed to paper over. Backward moves open it up.
+        final r = explore(n, 1);
+        expect(r.wins, greaterThan(0));
+        expect(r.deadlocks, 0, reason: 'no reachable position has no move');
       });
 
       test('$n a side: the race lane can be won', () {
         final r = explore(n, 3);
+        expect(r.deadlocks, 0, reason: 'the race has no draw');
         expect(r.wins, greaterThan(0),
             reason: 'a side must be able to finish before the other');
         expect(r.bothSidesAlwaysMove, isTrue,

@@ -25,6 +25,9 @@ class LudoPainter extends CustomPainter {
     required this.movable,
     required this.animating,
     required this.animatedCell,
+    required this.captured,
+    required this.capturedAt,
+    required this.capturedScale,
     required this.pulse,
     required this.tokenStyle,
     this.poppedBadge,
@@ -49,6 +52,16 @@ class LudoPainter extends CustomPainter {
   /// where the token is *drawn*.
   final (int, int)? animating;
   final Offset? animatedCell;
+
+  /// Tokens mid-capture, on their way back to their yard. The game state has
+  /// already sent them home, so without this they would simply appear there.
+  ///
+  /// Two beats, per the design: [capturedAt] is the square they were taken on
+  /// while they remove from it, then null while they appear in the yard slot
+  /// they are already standing in. [capturedScale] carries both.
+  final List<(int, int)> captured;
+  final Offset? capturedAt;
+  final double capturedScale;
 
   /// 0→1 breathing value for the movable-token highlight.
   final double pulse;
@@ -188,6 +201,8 @@ class LudoPainter extends CustomPainter {
       for (var i = 0; i < 4; i++) {
         final anim = animating;
         if (anim != null && anim.$1 == p && anim.$2 == i) continue;
+        // A token mid-capture is drawn by the capture beat, not here.
+        if (captured.contains((p, i))) continue;
         byCell
             .putIfAbsent(LudoLayout.cellOf(p, game.tokens[p][i], i), () => [])
             .add((p, i));
@@ -215,6 +230,13 @@ class LudoPainter extends CustomPainter {
     final cell = animatedCell;
     if (anim != null && cell != null) {
       _paintToken(canvas, _at(cell), anim.$1, anim.$2, scale: 1);
+    }
+
+    // The capture beat, over everything: removing on the square it was taken
+    // on, then appearing in its own yard.
+    for (final (p, i) in captured) {
+      final at = capturedAt ?? LudoLayout.cellOf(p, game.tokens[p][i], i);
+      _paintToken(canvas, _at(at), p, i, scale: capturedScale.clamp(0.0, 1.0));
     }
   }
 

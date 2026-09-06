@@ -23,7 +23,8 @@ class SetupSnakeScreen extends ConsumerStatefulWidget {
 class _SetupSnakeScreenState extends ConsumerState<SetupSnakeScreen> {
   SnakeSpeed _speed = SnakeSpeed.normal;
   SnakeArena _arena = SnakeArena.medium;
-  bool _wrap = false;
+  bool _wrap = true; // Wrap-walls ships on. Nothing persists this choice, so there is
+  // no stored value to honour and no migration to write.
 
   @override
   Widget build(BuildContext context) {

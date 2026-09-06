@@ -8,6 +8,8 @@ import '../../../core/theme/dally_tokens.dart';
 import '../../../core/widgets/game_glyph.dart';
 import '../../../core/widgets/how_to_play.dart';
 import 'ui/play_target_screen.dart';
+import 'ui/math_previews.dart';
+import 'ui/setup_math_screen.dart';
 
 /// Target — build an expression that reaches the number. Every puzzle is generated from a solution, so an exact answer always exists.
 class TargetModule extends GameModule {
@@ -80,8 +82,11 @@ class TargetModule extends GameModule {
   }
 
   @override
-  Widget buildSetupScreen(BuildContext context, WidgetRef ref) =>
-      PlayTargetScreen(module: this);
+  Widget buildSetupScreen(BuildContext context, WidgetRef ref) => SetupMathScreen(
+        module: this,
+        preview: const TargetPreview(),
+        levelCaption: 'How far the target sits from an easy combination of the tiles.',
+      );
 
   @override
   Widget buildPlayScreen(BuildContext context, WidgetRef ref, GameConfig config) =>
@@ -95,7 +100,7 @@ class TargetModule extends GameModule {
       readingLabel: 'Reading the screen',
       reading: [
         HowToLegend(howToCell(t: t, color: t.accent), 'The target.'),
-        HowToLegend(howToCell(t: t, hairline: true), 'A tile you have already used — it greys in place.'),
+        HowToLegend(howToCell(t: t, hairline: true), 'A tile you have already used. It greys in place.'),
       ],
       controls: [
         HowToStep(Icon(Icons.touch_app_outlined, size: 20, color: t.textMuted), 'Tap a sign, then a tile',

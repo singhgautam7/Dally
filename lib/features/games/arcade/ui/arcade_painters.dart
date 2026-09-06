@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../logic/avoider_core.dart';
 import '../logic/updraft_core.dart';
+import '../logic/updraft_token.dart';
+
+export '../logic/updraft_token.dart' show UpdraftToken, updraftTokenFromId, updraftTokenTilts;
 import '../logic/jumper_core.dart';
 import '../logic/racer_core.dart';
 import '../logic/tower_core.dart';
@@ -157,25 +160,6 @@ class JumperPainter extends CustomPainter {
   bool shouldRepaint(JumperPainter old) => true;
 }
 
-/// Flappy Token's four token styles. Geometry only — the accent stays the
-/// accent in every one, and all four share the same 26 × 26 hit box, so no
-/// style is easier.
-///
-/// [dot] and [ring] do not tilt — a circle rotating shows nothing — so they read
-/// the beat through a short scale pulse instead.
-enum UpdraftToken { dart, dot, block, ring }
-
-UpdraftToken updraftTokenFromId(String id) => switch (id) {
-      'dot' => UpdraftToken.dot,
-      'block' => UpdraftToken.block,
-      'ring' => UpdraftToken.ring,
-      _ => UpdraftToken.dart,
-    };
-
-/// True for the styles that show the beat through rotation rather than a pulse.
-bool updraftTokenTilts(UpdraftToken token) =>
-    token == UpdraftToken.dart || token == UpdraftToken.block;
-
 /// Draws a token into [box] in [colour]. Shared by the arena and the style
 /// previews, so what you tap is what you get.
 void paintUpdraftToken(Canvas canvas, UpdraftToken token, Rect box, Color colour) {
@@ -246,20 +230,15 @@ class UpdraftPainter extends CustomPainter {
 
     for (final p in core.pillars) {
       final radius = Radius.circular(core.pillarWidth * 0.18);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTRB(p.x, -radius.y, p.x + core.pillarWidth, p.gapTop),
-          radius,
-        ),
-        outline,
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTRB(p.x, p.gapBottom, p.x + core.pillarWidth, size.height + radius.y),
-          radius,
-        ),
-        outline,
-      );
+      // Two slabs, either of which is empty on a one-sided pillar — the same
+      // two rects the core collides against.
+      for (final slab in [
+        Rect.fromLTRB(p.x, -radius.y, p.x + core.pillarWidth, p.openTop),
+        Rect.fromLTRB(p.x, p.openBottom, p.x + core.pillarWidth, size.height + radius.y),
+      ]) {
+        if (slab.height <= radius.y) continue;
+        canvas.drawRRect(RRect.fromRectAndRadius(slab, radius), outline);
+      }
     }
 
     // The token holds where it hit for a beat before the card appears; the sim
@@ -327,23 +306,23 @@ class TowerPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     // The tower grows upward from the bottom; the camera holds the top few
     // floors on screen once it is taller than the arena.
-    final totalHeight = core.floors.length * TowerCore.floorHeight;
+    final totalHeight = core.floors.length * core.floorHeight;
     final lift = totalHeight > size.height - 120 ? totalHeight - (size.height - 120) : 0.0;
 
     for (var i = 0; i < core.floors.length; i++) {
       final f = core.floors[i];
-      final y = size.height - (i + 1) * TowerCore.floorHeight + lift;
-      if (y > size.height || y < -TowerCore.floorHeight) continue;
-      _block(canvas, Rect.fromLTWH(f.left, y, f.width, TowerCore.floorHeight - 1),
+      final y = size.height - (i + 1) * core.floorHeight + lift;
+      if (y > size.height || y < -core.floorHeight) continue;
+      _block(canvas, Rect.fromLTWH(f.left, y, f.width, core.floorHeight - 1),
           solid: true);
     }
 
     if (!core.dead) {
-      final sweepY = size.height - totalHeight - TowerCore.floorHeight * 2.4 + lift;
+      final sweepY = size.height - totalHeight - core.floorHeight * 2.4 + lift;
       _block(
         canvas,
         Rect.fromLTWH(core.sweepLeft, sweepY.clamp(4.0, size.height),
-            core.sweepWidth, TowerCore.floorHeight - 1),
+            core.sweepWidth, core.floorHeight - 1),
         solid: false,
       );
     }
@@ -410,7 +389,7 @@ class RacerPainter extends CustomPainter {
         b.lane * laneWidth + laneWidth * 0.18,
         b.y,
         laneWidth * 0.64,
-        RacerCore.blockHeight,
+        core.blockHeight,
       );
       // Obstacles are outlined; the car is solid.
       canvas.drawRRect(
@@ -426,7 +405,7 @@ class RacerPainter extends CustomPainter {
       core.lane * laneWidth + laneWidth * 0.24,
       size.height * RacerCore.carY,
       laneWidth * 0.52,
-      RacerCore.blockHeight * 0.9,
+      core.blockHeight * 0.9,
     );
     canvas.drawRRect(
       RRect.fromRectAndRadius(carRect, const Radius.circular(4)),
@@ -465,7 +444,7 @@ class AvoiderPainter extends CustomPainter {
 
     for (final o in core.obstacles) {
       canvas.drawRect(
-        Rect.fromLTWH(o.x, groundY - o.height, 18, o.height),
+        Rect.fromLTWH(o.x, groundY - o.height, core.obstacleWidth, o.height),
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.6
@@ -476,10 +455,10 @@ class AvoiderPainter extends CustomPainter {
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromLTWH(
-          AvoiderCore.playerX,
-          groundY - AvoiderCore.playerSize + core.y,
-          AvoiderCore.playerSize,
-          AvoiderCore.playerSize,
+          core.playerX,
+          groundY - core.playerSize + core.y,
+          core.playerSize,
+          core.playerSize,
         ),
         const Radius.circular(3),
       ),

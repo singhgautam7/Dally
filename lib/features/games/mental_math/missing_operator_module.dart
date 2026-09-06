@@ -8,6 +8,8 @@ import '../../../core/theme/dally_tokens.dart';
 import '../../../core/widgets/game_glyph.dart';
 import '../../../core/widgets/how_to_play.dart';
 import 'ui/play_missing_operator_screen.dart';
+import 'ui/math_previews.dart';
+import 'ui/setup_math_screen.dart';
 
 /// Missing Operator — one omitted sign (two on Hard), always with a unique answer.
 class MissingOperatorModule extends GameModule {
@@ -81,8 +83,11 @@ class MissingOperatorModule extends GameModule {
   }
 
   @override
-  Widget buildSetupScreen(BuildContext context, WidgetRef ref) =>
-      PlayMissingOperatorScreen(module: this);
+  Widget buildSetupScreen(BuildContext context, WidgetRef ref) => SetupMathScreen(
+        module: this,
+        preview: const MissingOperatorPreview(),
+        levelCaption: 'How many signs could plausibly fit, and how large the numbers run.',
+      );
 
   @override
   Widget buildPlayScreen(BuildContext context, WidgetRef ref, GameConfig config) =>
@@ -98,11 +103,11 @@ class MissingOperatorModule extends GameModule {
         HowToLegend(howToCell(t: t, hairline: true, child: Text('?',
             style: TextStyle(fontFamily: 'Space Grotesk', fontSize: 16, color: t.accent))),
             'The slot. The only accent on screen.'),
-        HowToLegend(howToCell(t: t, color: t.danger), 'A key you got wrong — it stays tapped out.'),
+        HowToLegend(howToCell(t: t, color: t.danger), 'A key you got wrong. It stays tapped out.'),
       ],
       controls: [
         HowToStep(Icon(Icons.grid_view_rounded, size: 20, color: t.textMuted), 'Four fixed keys',
-            'Always + − × ÷ in that order, so the positions are learnable'),
+            'Always plus, minus, times, divide in that order, so the positions are learnable'),
         HowToStep(Icon(Icons.filter_2_rounded, size: 20, color: t.textMuted), 'Two slots on Hard',
             'Both have to be right before it moves on'),
       ],

@@ -8,6 +8,8 @@ import '../../../core/theme/dally_tokens.dart';
 import '../../../core/widgets/game_glyph.dart';
 import '../../../core/widgets/how_to_play.dart';
 import 'ui/play_sequence_screen.dart';
+import 'ui/math_previews.dart';
+import 'ui/setup_math_screen.dart';
 
 /// Sequence — spot the rule and give the next value. Difficulty is the rule family, not bigger numbers.
 class SequenceModule extends GameModule {
@@ -81,8 +83,11 @@ class SequenceModule extends GameModule {
   }
 
   @override
-  Widget buildSetupScreen(BuildContext context, WidgetRef ref) =>
-      PlaySequenceScreen(module: this);
+  Widget buildSetupScreen(BuildContext context, WidgetRef ref) => SetupMathScreen(
+        module: this,
+        preview: const SequencePreview(),
+        levelCaption: 'Easy is one operation, Normal two mixed, Hard two runs woven together.',
+      );
 
   @override
   Widget buildPlayScreen(BuildContext context, WidgetRef ref, GameConfig config) =>

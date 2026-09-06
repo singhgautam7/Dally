@@ -34,8 +34,17 @@ class SetupSection extends StatelessWidget {
 }
 
 /// The shared setup-screen frame: back + title, an optional preview of what
-/// you're about to play, the options, a quiet how-to link and best-for-config
-/// line, then Continue over Start — always in the bottom third.
+/// you're about to play, the options, then — parked in the bottom third — the
+/// best-for-config line, and the action row.
+///
+/// **How to play shares the action row with Start**, outline on the left and
+/// the filled Start on the right, splitting the width between them. Both are
+/// always reachable without scrolling, and the fill is the only thing telling
+/// them apart — which is why neither carries an icon: one of the two having a
+/// glyph would read as the more important of the pair, and it is not.
+///
+/// A resumable game keeps Continue above that row, and Start steps down to the
+/// outline fill for the pair.
 class SetupScaffold extends StatelessWidget {
   const SetupScaffold({
     super.key,
@@ -87,16 +96,7 @@ class SetupScaffold extends StatelessWidget {
                         if (i > 0) const Gap(Insets.s5),
                         options[i],
                       ],
-                      if (onHowToPlay != null) ...[
-                        const Gap(Insets.s5),
-                        Center(
-                          child: GestureDetector(
-                            onTap: onHowToPlay,
-                            child: Text('How to play',
-                                style: DallyType.bodyStrong.copyWith(fontSize: 13, color: t.accent)),
-                          ),
-                        ),
-                      ],
+                      const Gap(Insets.s5),
                     ],
                   ),
                 ),
@@ -109,13 +109,74 @@ class SetupScaffold extends StatelessWidget {
                 ),
                 const Gap(Insets.s3),
               ],
+              // Start is the primary action and stays one; a resumable game
+              // puts Continue above the row and demotes Start beside it.
               if (onContinue != null && continueLabel != null) ...[
                 PrimaryPill(label: continueLabel!, onPressed: onContinue),
                 const Gap(Insets.s2 + 2),
-                PrimaryPill.secondary(label: startLabel, onPressed: onStart),
-              ] else
+              ],
+              if (onHowToPlay != null)
+                Row(
+                  children: [
+                    Expanded(child: HowToPlayLink(onTap: onHowToPlay!)),
+                    const Gap.h(Insets.s2 + 2),
+                    Expanded(
+                      child: onContinue != null && continueLabel != null
+                          ? PrimaryPill.secondary(
+                              label: startLabel, onPressed: onStart)
+                          : PrimaryPill(label: startLabel, onPressed: onStart),
+                    ),
+                  ],
+                )
+              else if (onContinue != null && continueLabel != null)
+                PrimaryPill.secondary(label: startLabel, onPressed: onStart)
+              else
                 PrimaryPill(label: startLabel, onPressed: onStart),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "How to play", the left half of every setup screen's action row.
+///
+/// Shaped exactly like the Start pill beside it — same height, same radius,
+/// same weight of word — and separated from it only by the fill. There is no
+/// icon for the same reason: the pair are two halves of one row, and a glyph on
+/// one of them would rank it against the other.
+class HowToPlayLink extends StatelessWidget {
+  const HowToPlayLink({super.key, required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    return Semantics(
+      button: true,
+      child: Material(
+        color: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: Radii.pillBR,
+          side: BorderSide(color: t.accent.withValues(alpha: 0.45)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            // Matches PrimaryPill's own padding, so the two halves of the row
+            // are the same height without either one being told a number.
+            padding: const EdgeInsets.symmetric(vertical: 15, horizontal: Insets.s4),
+            child: Text(
+              'How to play',
+              maxLines: 1,
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              style: DallyType.bodyStrong
+                  .copyWith(fontWeight: FontWeight.w500, color: t.accent),
+            ),
           ),
         ),
       ),

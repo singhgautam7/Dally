@@ -61,6 +61,60 @@ void main() {
       expect(g.food == ahead, isFalse); // relocated
     });
   });
+
+  group('the tail has a cell to slide out of', () {
+    // The v5 regression: the painter interpolated every segment from the cell
+    // its successor occupies, but the *last* segment has no successor, so it
+    // was interpolated from itself — it stood still for a whole tick and then
+    // jumped a full cell. That is the flicker. The core now remembers the cell
+    // the step vacated, which is the only thing the painter was missing.
+
+    test('a plain step records the cell the tail left', () {
+      final g = SnakeGame(size: 9, wrap: false, rng: Random(1));
+      final tailBefore = g.snake.last;
+      g.step();
+      expect(g.prevTail, tailBefore);
+      expect(g.snake.contains(g.prevTail), isFalse,
+          reason: 'the vacated cell is no longer part of the body');
+    });
+
+    test('the tail slides exactly one cell, every tick', () {
+      final g = SnakeGame(size: 11, wrap: true, rng: Random(2));
+      for (var i = 0; i < 20; i++) {
+        final tailBefore = g.snake.last;
+        g.step();
+        if (g.prevTail == null) continue; // grew: the tail genuinely held still
+        final from = g.prevTail!, to = g.snake.last;
+        expect(from, tailBefore);
+        final dc = (from % 11) - (to % 11);
+        final dr = (from ~/ 11) - (to ~/ 11);
+        // One orthogonal step, or a wrap across the arena — never a stand-still.
+        final steps = dc.abs() + dr.abs();
+        expect(steps == 1 || steps == 10, isTrue,
+            reason: 'tail moved $from → $to');
+      }
+    });
+
+    test('growing leaves the tail where it is, and says so', () {
+      final g = SnakeGame(size: 9, wrap: false, rng: Random(3));
+      // Put the food directly ahead of the head so the next step grows.
+      g.food = g.head + 1;
+      final tailBefore = g.snake.last;
+      final result = g.step();
+      expect(result.grew, isTrue);
+      expect(g.prevTail, isNull,
+          reason: 'nothing was vacated, so the tail has nowhere to slide from');
+      expect(g.snake.last, tailBefore);
+    });
+
+    test('a reset clears the remembered cell', () {
+      final g = SnakeGame(size: 9, wrap: false, rng: Random(4));
+      g.step();
+      expect(g.prevTail, isNotNull);
+      g.reset();
+      expect(g.prevTail, isNull);
+    });
+  });
 }
 
 /// Reaches into the game to place food for a deterministic growth test.

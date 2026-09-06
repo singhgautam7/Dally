@@ -8,6 +8,8 @@ import '../../../core/theme/dally_tokens.dart';
 import '../../../core/widgets/game_glyph.dart';
 import '../../../core/widgets/how_to_play.dart';
 import 'ui/play_calcudoku_screen.dart';
+import 'ui/math_previews.dart';
+import 'ui/setup_math_screen.dart';
 
 /// Calcudoku — a Latin square with arithmetic cages, generated with a verified unique solution.
 class CalcudokuModule extends GameModule {
@@ -82,8 +84,11 @@ class CalcudokuModule extends GameModule {
   }
 
   @override
-  Widget buildSetupScreen(BuildContext context, WidgetRef ref) =>
-      PlayCalcudokuScreen(module: this);
+  Widget buildSetupScreen(BuildContext context, WidgetRef ref) => SetupMathScreen(
+        module: this,
+        preview: const CalcudokuPreview(),
+        levelCaption: 'Grid size and how many operations the cages use.',
+      );
 
   @override
   Widget buildPlayScreen(BuildContext context, WidgetRef ref, GameConfig config) =>
@@ -96,7 +101,7 @@ class CalcudokuModule extends GameModule {
       goal: 'Fill the grid so every row and column holds each number once, and every cage hits its target.',
       readingLabel: 'Reading the screen',
       reading: [
-        HowToLegend(howToCell(t: t, hairline: true), 'A cage — one heavier outline, target in its top-left cell.'),
+        HowToLegend(howToCell(t: t, hairline: true), 'A cage. One heavier outline, with its target in the top-left cell.'),
         HowToLegend(howToCell(t: t, color: t.danger), 'Two cells that disagree, flagged once both are filled.'),
       ],
       controls: [

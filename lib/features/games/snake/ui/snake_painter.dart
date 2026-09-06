@@ -68,8 +68,12 @@ class SnakePainter extends CustomPainter {
     // wider than one cell means the body wrapped the arena edge, and there is
     // nothing sensible to slide across — snap instead.
     Offset lead(int i) => cellCenter(game.snake[i]);
-    Offset from(int i) =>
-        cellCenter(game.snake[i + 1 < game.snake.length ? i + 1 : i]);
+    // The tail's previous cell is not in the body any more — the step vacated
+    // it — so it comes from the core's `prevTail`. Null means the last step
+    // grew the snake and the tail genuinely did not move.
+    Offset from(int i) => i + 1 < game.snake.length
+        ? cellCenter(game.snake[i + 1])
+        : cellCenter(game.prevTail ?? game.snake[i]);
     Offset drawnCentre(int i) {
       if (progress >= 1) return lead(i);
       final a = from(i), b = lead(i);
@@ -173,5 +177,6 @@ class SnakePainter extends CustomPainter {
       old.style != style ||
       old.game.snake.length != game.snake.length ||
       old.game.head != game.head ||
+      old.game.prevTail != game.prevTail ||
       old.game.food != game.food;
 }

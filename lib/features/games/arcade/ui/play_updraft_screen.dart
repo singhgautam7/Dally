@@ -81,13 +81,19 @@ class _PlayUpdraftScreenState extends ConsumerState<PlayUpdraftScreen>
     super.didChangeAppLifecycleState(state);
   }
 
-  void _ensureCore(Size size) {
-    if (_core != null && _arena == size) return;
+  void _ensureCore(Size size, UpdraftToken token) {
+    if (_core != null && _arena == size) {
+      // Collision follows the visible silhouette, so a style picked from the
+      // pause sheet has to reach the core. It never touches generation.
+      _core!.token = token;
+      return;
+    }
     _arena = size;
     _core = UpdraftCore(
       rng: ref.read(randomProvider),
       arenaWidth: size.width,
       arenaHeight: size.height,
+      token: token,
     );
   }
 
@@ -179,7 +185,7 @@ class _PlayUpdraftScreenState extends ConsumerState<PlayUpdraftScreen>
       stylePreviewBuilder: (context, _, id) =>
           _TokenPreview(token: updraftTokenFromId(id)),
       arena: (context, size) {
-        _ensureCore(size);
+        _ensureCore(size, token);
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTapDown: (_) => _tap(),

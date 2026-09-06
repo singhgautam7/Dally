@@ -170,19 +170,26 @@ class StatBlockView extends StatelessWidget {
               const Gap(Insets.s2 + 2),
             ],
             // Two per row, so long labels never clip on a narrow phone.
+            //
+            // The pair is wrapped in an IntrinsicHeight so the two cards match
+            // height. Stretching without one asks the children for an infinite
+            // height inside a scroll view, which threw during layout and left
+            // the whole per-game stats screen blank.
             for (var i = 0; i < block.cells.length; i += 2) ...[
               if (i > 0) const Gap(Insets.s2 + 2),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(child: _Cell(cell: block.cells[i])),
-                  const Gap.h(Insets.s2 + 2),
-                  Expanded(
-                    child: i + 1 < block.cells.length
-                        ? _Cell(cell: block.cells[i + 1])
-                        : const SizedBox.shrink(),
-                  ),
-                ],
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: _Cell(cell: block.cells[i])),
+                    const Gap.h(Insets.s2 + 2),
+                    Expanded(
+                      child: i + 1 < block.cells.length
+                          ? _Cell(cell: block.cells[i + 1])
+                          : const SizedBox.shrink(),
+                    ),
+                  ],
+                ),
               ),
             ],
             if (block.note != null) ...[

@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'accents.dart';
+import 'materials.dart';
 
 /// A resolved palette: the eleven semantic tokens plus the derived sets every
 /// game reads. It is **not** authored any more — it is what
@@ -37,6 +38,7 @@ class Palette {
     required this.danger,
     required this.onAccent,
     required this.minesweeperNumbers,
+    required this.materials,
     required this.scaleMid,
     required this.scalePeak,
   });
@@ -82,6 +84,10 @@ class Palette {
   /// The fixed 8-step Minesweeper digit colours (1–4 cool, 5–8 warm), one set
   /// per mode.
   final List<Color> minesweeperNumbers;
+
+  /// The Toys material set — accent-independent, resolved from the neutral ramp
+  /// alone. See `theme/materials.dart` and `.agents/CLAUDE.md` §11a.4.
+  final MaterialPalette materials;
 
   /// The 2048 ramp's mid and top stops — **accent-independent**, one authored
   /// pair per neutral ramp. Tiles are surfaces, so what is measured is the

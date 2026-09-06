@@ -68,7 +68,7 @@ class TicTacToeModule extends GameModule {
 
   @override
   String? statSummary(GameAggregate agg) =>
-      agg.sessions == 0 ? null : '\${agg.outcome(SessionOutcome.won)} / \${agg.outcome(SessionOutcome.lost)} / \${agg.outcome(SessionOutcome.drawn)}';
+      agg.sessions == 0 ? null : '${agg.outcome(SessionOutcome.won)} / ${agg.outcome(SessionOutcome.lost)} / ${agg.outcome(SessionOutcome.drawn)}';
   @override
   Widget buildSetupScreen(BuildContext context, WidgetRef ref) =>
       SetupTicTacToeScreen(moduleId: id);

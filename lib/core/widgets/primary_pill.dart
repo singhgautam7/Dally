@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/dally_tokens.dart';
 import '../theme/spacing.dart';
 import '../theme/type_scale.dart';
+import 'dally_tooltip.dart';
 
 /// The button. Start, Continue, Again, Resume, Leave game — all of them.
 ///
@@ -139,17 +140,8 @@ class _ChromeButtonState extends State<ChromeButton> {
       button: true,
       enabled: widget.enabled,
       label: widget.semanticLabel,
-      child: Tooltip(
+      child: DallyTooltip(
         message: widget.tooltip ?? widget.semanticLabel,
-        // The Semantics above already names the control; letting the tooltip
-        // add its own would announce it twice.
-        excludeFromSemantics: true,
-        decoration: BoxDecoration(
-          color: t.surfaceAlt,
-          borderRadius: Radii.cellBR,
-          border: Border.all(color: t.border),
-        ),
-        textStyle: DallyType.body.copyWith(fontSize: 12, color: t.textPrimary),
         child: Opacity(
           opacity: widget.enabled ? 1 : 0.38,
           // The press tint rides on a raw [Listener] rather than the gesture

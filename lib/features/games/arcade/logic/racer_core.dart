@@ -1,3 +1,4 @@
+import '../../../../core/game/arena_scale.dart';
 import '../../../../core/util/dally_random.dart';
 
 /// A blocker sitting in one lane. `y` is measured down the arena.
@@ -12,6 +13,11 @@ class LaneBlock {
 /// long rather than endless.
 ///
 /// The spawner **always leaves one open lane**, so the road is never blocked.
+///
+/// **Everything down the road is viewport-relative.** Block height, speed and
+/// spawn spacing are fractions of the measured arena height, so the car has the
+/// same seconds to react on a small phone and on a tall tablet — it used to be
+/// absolute pixels, which swung reaction time from 1.0s to 3.3s.
 class RacerCore {
   RacerCore({required this.rng, required this.arenaHeight});
 
@@ -20,11 +26,27 @@ class RacerCore {
 
   static const int lanes = 3;
   static const double carY = 0.78;
-  static const double blockHeight = 46;
 
-  /// Arena units per metre — see [AvoiderCore.unitsPerMetre]. Spawn spacing
-  /// stays in arena units; distance and the speed curve are in metres.
+  // ── Authored tuning, in reference units ──────────────────────────────────
+
+  static const double blockHeightRef = 46;
+  static const double speedRef = 240;
+  static const double spawnGapRef = 210;
+  static const double spawnGapEaseRef = 120;
+  static const double dashPeriodRef = 60;
+
+  /// How much faster the road gets over a long session — the shared curve.
+  static const double speedRamp = 1.33;
+
+  /// Reference units per metre — see [AvoiderCore.unitsPerMetre]. Distance is
+  /// measured in *reference* travel, so a kilometre is a kilometre on every
+  /// screen and a tablet cannot inflate a record.
   static const double unitsPerMetre = 14;
+
+  /// What one reference unit of travel down the road costs on this arena.
+  double get travelScale => axisScale(arenaHeight, kReferenceArena.height);
+
+  double get blockHeight => blockHeightRef * travelScale;
 
   final List<LaneBlock> blocks = [];
 
@@ -35,9 +57,14 @@ class RacerCore {
   double distance = 0;
 
   double _sinceSpawn = 0;
+  double _elapsed = 0;
+
+  /// Elapsed *simulated* seconds — the input to the shared ramp.
+  double get elapsedSeconds => _elapsed;
 
   /// Speed in arena units per second. Rises, then flattens out.
-  double get speed => 240 + 320 * (1 - 1 / (1 + distance / 900));
+  double get speed =>
+      speedRef * travelScale * arcadeRamp(_elapsed, amount: speedRamp);
 
   /// The moving lane dashes are the only motion cue; this is their offset.
   double dashOffset = 0;
@@ -50,6 +77,7 @@ class RacerCore {
     dead = false;
     distance = 0;
     _sinceSpawn = 0;
+    _elapsed = 0;
     dashOffset = 0;
   }
 
@@ -63,9 +91,10 @@ class RacerCore {
 
   void step(double dt) {
     if (dead) return;
+    _elapsed += dt;
     final travelled = speed * dt;
-    distance += travelled / unitsPerMetre;
-    dashOffset = (dashOffset + travelled) % 60;
+    distance += travelled / travelScale / unitsPerMetre;
+    dashOffset = (dashOffset + travelled) % (dashPeriodRef * travelScale);
 
     for (var i = 0; i < blocks.length; i++) {
       blocks[i] = LaneBlock(lane: blocks[i].lane, y: blocks[i].y + travelled);
@@ -75,7 +104,8 @@ class RacerCore {
     // Spawn on distance rather than time, so the gap between rows is constant
     // in metres however fast the car is going.
     _sinceSpawn += travelled;
-    final gap = 210 + 120 * (1 / (1 + distance / 1400));
+    final gap =
+        (spawnGapRef + spawnGapEaseRef * (1 / (1 + distance / 1400))) * travelScale;
     if (_sinceSpawn >= gap) {
       _sinceSpawn = 0;
       _spawnRow();

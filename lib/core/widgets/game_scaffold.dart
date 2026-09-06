@@ -22,7 +22,7 @@ import 'primary_pill.dart';
 class GameScaffold extends ConsumerStatefulWidget {
   const GameScaffold({
     super.key,
-    required this.statusBar,
+    this.statusBar,
     required this.board,
     required this.onOverflow,
     this.controls,
@@ -31,13 +31,18 @@ class GameScaffold extends ConsumerStatefulWidget {
     this.ended = false,
     this.progressSaved = false,
     this.fillControls = false,
+    this.boardInset,
     this.onPanStart,
     this.onPanUpdate,
     this.onPanEnd,
   });
 
   /// Score cards / stat chips / clock row shown just under the top bar.
-  final Widget statusBar;
+  ///
+  /// Null when a game has nothing to put there — the row **and its gaps** are
+  /// then omitted rather than reserved, which is 30px of board a game like
+  /// chess (whose seats live with the board) would otherwise pay for nothing.
+  final Widget? statusBar;
 
   /// The board. It receives the available middle area via layout constraints
   /// (its own `LayoutBuilder`) and sizes itself — square games take
@@ -70,6 +75,12 @@ class GameScaffold extends ConsumerStatefulWidget {
   /// natural height. Snake's centred D-pad is the one user.
   final bool fillControls;
 
+  /// Horizontal inset for the **board area only**, overriding the screen's
+  /// standard gutter. Chess passes a hairline so its board reaches the edges
+  /// and every square stays a thumb-width; everything else leaves it null and
+  /// keeps the shared gutter.
+  final double? boardInset;
+
   /// Whole-screen drag handling for the swipe games. The gesture covers the
   /// board *and* the empty space around it, and stays translucent so buttons
   /// underneath still take their taps.
@@ -96,60 +107,86 @@ class _GameScaffoldState extends ConsumerState<GameScaffold> {
     final hasPan =
         widget.onPanStart != null || widget.onPanUpdate != null || widget.onPanEnd != null;
 
+    // The gutter is applied per row rather than to the whole column, so the
+    // board can opt out of it ([boardInset]) without every other row moving.
+    const gutter = EdgeInsets.symmetric(horizontal: Insets.s4 + 2);
+    final boardGutter = widget.boardInset == null
+        ? gutter
+        : EdgeInsets.symmetric(horizontal: widget.boardInset!);
+
     Widget body = Padding(
-      padding: const EdgeInsets.fromLTRB(Insets.s4 + 2, Insets.s5, Insets.s4 + 2, Insets.s4),
+      padding: const EdgeInsets.fromLTRB(0, Insets.s5, 0, Insets.s4),
       child: Column(
         children: [
           // Top bar — undo (where the game has one) then overflow.
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              if (widget.onUndo != null) ...[
-                UndoButton(onTap: widget.onUndo!, enabled: widget.canUndo),
-                const Gap.h(Insets.s2),
+          Padding(
+            padding: gutter,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (widget.onUndo != null) ...[
+                  UndoButton(onTap: widget.onUndo!, enabled: widget.canUndo),
+                  const Gap.h(Insets.s2),
+                ],
+                OverflowButton(onTap: _openPause),
               ],
-              OverflowButton(onTap: _openPause),
-            ],
+            ),
           ),
-          const Gap(Insets.s1 + 2),
-          widget.statusBar,
+          if (widget.statusBar != null) ...[
+            const Gap(Insets.s1 + 2),
+            Padding(padding: gutter, child: widget.statusBar!),
+          ],
           const Gap(Insets.s6),
           if (widget.fillControls)
             // The board keeps its square, the controls take everything under it.
             Expanded(
-              child: LayoutBuilder(
-                builder: (context, c) {
-                  final side = math.min(c.maxWidth, c.maxHeight);
-                  return Column(
-                    children: [
-                      SizedBox(
-                        width: side,
-                        height: side,
-                        child: RepaintBoundary(child: widget.board),
-                      ),
-                      if (widget.controls != null) Expanded(child: widget.controls!),
-                    ],
-                  );
-                },
+              child: Padding(
+                padding: boardGutter,
+                child: LayoutBuilder(
+                  builder: (context, c) {
+                    final side = math.min(c.maxWidth, c.maxHeight);
+                    return Column(
+                      children: [
+                        SizedBox(
+                          width: side,
+                          height: side,
+                          child: RepaintBoundary(child: widget.board),
+                        ),
+                        if (widget.controls != null) Expanded(child: widget.controls!),
+                      ],
+                    );
+                  },
+                ),
               ),
             )
           else ...[
             // Board hugs the area under the status row; leftover space falls
             // to the bottom, above the controls (per the mockups).
             Expanded(
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: RepaintBoundary(child: widget.board),
+              child: Padding(
+                padding: boardGutter,
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: RepaintBoundary(child: widget.board),
+                ),
               ),
             ),
             // The end-of-game strip grows the controls, which shrinks the board
             // area above it. Animating the size is what stops the board jumping.
             if (widget.controls != null)
-              AnimatedSize(
-                duration: reduced ? Duration.zero : MotionPreset.appear.duration,
-                curve: MotionPreset.appear.curve,
-                alignment: Alignment.topCenter,
-                child: widget.controls!,
+              Padding(
+                padding: gutter,
+                // Reduce Motion drops the wrapper rather than giving it a zero
+                // duration: a zero-duration AnimatedSize re-dirties itself
+                // inside its own layout pass, which Flutter asserts on.
+                child: reduced
+                    ? widget.controls!
+                    : AnimatedSize(
+                        duration: MotionPreset.appear.duration,
+                        curve: MotionPreset.appear.curve,
+                        alignment: Alignment.topCenter,
+                        child: widget.controls!,
+                      ),
               ),
           ],
         ],

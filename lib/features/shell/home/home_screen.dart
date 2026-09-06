@@ -15,10 +15,9 @@ import '../../../core/widgets/dally_empty_state.dart';
 import '../../../core/widgets/filter_chip_pill.dart';
 import '../../../core/widgets/game_tile.dart';
 import 'filter_sheet.dart';
-import '../../games/mental_math/math_difficulty.dart';
 import 'home_filter.dart';
 import 'search_field.dart';
-import '../../../core/widgets/dally_sheet.dart';
+import '../../../core/widgets/dally_tooltip.dart';
 
 /// Home = the games list. Registry-driven, grouped into labelled sections, with
 /// a catalogue-derived chip row, a More sheet and a search mode. No bottom nav;
@@ -199,18 +198,12 @@ class _SectionedGrid extends ConsumerWidget {
                   top: section == sections.first.$1 ? 0 : Insets.s5,
                   bottom: Insets.s3,
                 ),
-                child: Row(
-                  children: [
-                    Text(section.label.toUpperCase(),
-                        style: DallyType.label
-                            .copyWith(fontSize: 10, letterSpacing: 1.4, color: t.textFaint)),
-                    const Spacer(),
-                    // The Mental Math header carries the one control its six
-                    // games share; there is no module screen behind it.
-                    if (section == HomeSection.mentalMath)
-                      const _DifficultyControl(),
-                  ],
-                ),
+                // No section carries a control any more: the Mental Math level
+                // used to live here because its six drills had no setup screen.
+                // They have one now, like every other game.
+                child: Text(section.label.toUpperCase(),
+                    style: DallyType.label
+                        .copyWith(fontSize: 10, letterSpacing: 1.4, color: t.textFaint)),
               ),
             ),
           SliverGrid(
@@ -230,6 +223,7 @@ class _SectionedGrid extends ConsumerWidget {
                     vibe: m.vibeLabel,
                     seats: m.players.contains(PlayerMode.passAndPlay) ? m.playerCount : null,
                     best: m.homeBestLabel(stats),
+                    bestIsRecord: m.hasSessionOutcome,
                     onTap: () => onOpen(m),
                   ),
                 );
@@ -244,6 +238,8 @@ class _SectionedGrid extends ConsumerWidget {
   }
 }
 
+/// One of Home's icon-only controls. [label] names it for a screen reader and
+/// is the word its tooltip uncovers, so both say the same thing.
 class _TopIcon extends StatelessWidget {
   const _TopIcon({required this.icon, required this.label, required this.onTap});
   final IconData icon;
@@ -256,10 +252,14 @@ class _TopIcon extends StatelessWidget {
     return Semantics(
       button: true,
       label: label,
-      child: InkResponse(
-        onTap: onTap,
-        radius: 24,
-        child: SizedBox(width: 36, height: 38, child: Icon(icon, color: t.textMuted, size: 21)),
+      child: DallyTooltip(
+        message: label,
+        child: InkResponse(
+          onTap: onTap,
+          radius: 24,
+          child: SizedBox(
+              width: 36, height: 38, child: Icon(icon, color: t.textMuted, size: 21)),
+        ),
       ),
     );
   }
@@ -276,93 +276,28 @@ class _ThemeSwatchButton extends StatelessWidget {
     return Semantics(
       button: true,
       label: 'Change theme',
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            color: t.surface,
-            shape: BoxShape.circle,
-            border: Border.all(color: t.border),
-          ),
-          child: Center(
-            child: Container(
-              width: 17,
-              height: 17,
-              decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+      child: DallyTooltip(
+        message: 'Change theme',
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: t.surface,
+              shape: BoxShape.circle,
+              border: Border.all(color: t.border),
+            ),
+            child: Center(
+              child: Container(
+                width: 17,
+                height: 17,
+                decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+              ),
             ),
           ),
         ),
       ),
-    );
-  }
-}
-
-/// The Mental Math difficulty control, opened from that section's header and
-/// applied to all six drills at once. Bests are kept per level.
-class _DifficultyControl extends ConsumerWidget {
-  const _DifficultyControl();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final t = context.tokens;
-    final current = ref.watch(mathDifficultyProvider);
-    return Semantics(
-      button: true,
-      label: 'Mental math difficulty',
-      child: GestureDetector(
-        onTap: () => _open(context, ref),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(current.label,
-                style: DallyType.body.copyWith(fontSize: 12, color: t.accent)),
-            const Gap.h(2),
-            Icon(Icons.expand_more_rounded, size: 16, color: t.accent),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _open(BuildContext context, WidgetRef ref) {
-    return showDallySheet<void>(
-    context,
-      builder: (sheetContext) {
-        final t = sheetContext.tokens;
-        final current = ref.read(mathDifficultyProvider);
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(Insets.s5, 0, Insets.s5, Insets.s5),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text('Mental math difficulty',
-                    style: DallyType.title.copyWith(color: t.textPrimary)),
-                const SizedBox(height: 5),
-                Text('Applies to all six drills. Bests are kept per level.',
-                    style: DallyType.body.copyWith(fontSize: 12, color: t.textFaint)),
-                const Gap(Insets.s4),
-                for (final d in MathDifficulty.values)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(d.label,
-                        style: DallyType.body.copyWith(fontSize: 15, color: t.textPrimary)),
-                    trailing: d == current
-                        ? Icon(Icons.check_rounded, size: 20, color: t.accent)
-                        : null,
-                    onTap: () {
-                      ref.read(mathDifficultyProvider.notifier).select(d);
-                      Navigator.of(sheetContext).pop();
-                    },
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 }

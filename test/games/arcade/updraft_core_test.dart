@@ -1,5 +1,8 @@
+import 'dart:ui';
+
 import 'package:dally/core/util/dally_random.dart';
 import 'package:dally/features/games/arcade/logic/updraft_core.dart';
+import 'package:dally/features/games/arcade/logic/updraft_token.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Deterministic: a fixed timestep and a seeded RNG, so nothing here depends on
@@ -7,8 +10,17 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   const dt = 1 / 62.5;
 
-  UpdraftCore core({int seed = 5, double w = 354, double h = 560}) =>
-      UpdraftCore(rng: DallyRandom.seeded(seed), arenaWidth: w, arenaHeight: h);
+  UpdraftCore core({
+    int seed = 5,
+    double w = 354,
+    double h = 560,
+    UpdraftToken token = UpdraftToken.dart,
+  }) =>
+      UpdraftCore(
+          rng: DallyRandom.seeded(seed),
+          arenaWidth: w,
+          arenaHeight: h,
+          token: token);
 
   void advance(UpdraftCore c, double seconds, {void Function(int step)? each}) {
     final steps = (seconds / dt).round();
@@ -49,7 +61,9 @@ void main() {
       final c = core();
       advance(c, 10);
       expect(c.dead, isTrue);
-      expect(c.y + c.tokenHeight / 2, closeTo(560, 0.01));
+      // The *silhouette* comes to rest on the floor, not its bounding box —
+      // the dart's tilted point is what touches down.
+      expect(c.silhouette.bottom, closeTo(560, 0.01));
     });
 
     test('beating into the ceiling ends the run too', () {
@@ -59,7 +73,7 @@ void main() {
         c.step(dt);
       }
       expect(c.dead, isTrue);
-      expect(c.y - c.tokenHeight / 2, closeTo(0, 0.01));
+      expect(c.silhouette.top, closeTo(0, 0.01));
     });
 
     test('a dead token stops moving and refuses to beat', () {
@@ -111,9 +125,22 @@ void main() {
       seen.addAll(c.pillars);
       expect(seen.length, greaterThan(5));
       for (final p in seen) {
-        expect(p.gapTop, greaterThan(0), reason: 'gap runs off the ceiling');
-        expect(p.gapBottom, lessThan(560), reason: 'gap runs off the floor');
+        expect(p.openTop, greaterThanOrEqualTo(0), reason: 'lane runs off the ceiling');
+        expect(p.openBottom, lessThanOrEqualTo(560), reason: 'lane runs off the floor');
         expect(p.gapHeight, greaterThanOrEqualTo(UpdraftCore.gapEndTokens * c.tokenHeight));
+        // A two-sided pillar keeps both slabs off the edges; a one-sided one is
+        // open at exactly one edge by construction.
+        switch (p.placement) {
+          case PillarPlacement.both:
+            expect(p.openTop, greaterThan(0));
+            expect(p.openBottom, lessThan(560));
+          case PillarPlacement.top:
+            expect(p.openBottom, 560);
+            expect(p.openTop, greaterThan(0));
+          case PillarPlacement.bottom:
+            expect(p.openTop, 0);
+            expect(p.openBottom, lessThan(560));
+        }
       }
     });
 
@@ -138,10 +165,14 @@ void main() {
     test('hitting a pillar ends the run', () {
       final c = core(seed: 8);
       final p = c.pillars.first;
-      // Sit hard against the top pillar and wait for it to arrive.
+      // Sit hard inside whichever slab this pillar actually has and wait for it
+      // to arrive.
+      final inSlab = p.openTop > 0
+          ? p.openTop - c.tokenHeight
+          : p.openBottom + c.tokenHeight;
       advance(c, 20, each: (_) {
         if (!c.dead) {
-          c.y = p.gapTop - c.tokenHeight;
+          c.y = inSlab;
           c.velocity = 0;
         }
       });
@@ -213,8 +244,12 @@ void main() {
           closeTo(tablet.gravity / tablet.tokenHeight, 1e-9));
       expect(phone.beatImpulse / phone.tokenHeight,
           closeTo(tablet.beatImpulse / tablet.tokenHeight, 1e-9));
-      expect(phone.speed / phone.tokenHeight,
-          closeTo(tablet.speed / tablet.tokenHeight, 1e-9));
+      // Horizontal speed answers to the *width* instead, so a pillar takes the
+      // same seconds to arrive however wide the arena is.
+      expect(phone.speed / phone.arenaWidth,
+          closeTo(tablet.speed / tablet.arenaWidth, 1e-9));
+      expect(phone.pillarWidth / phone.arenaWidth,
+          closeTo(tablet.pillarWidth / tablet.arenaWidth, 1e-9));
     });
 
     test('the gap is always a multiple of the token, at every size', () {
@@ -241,6 +276,128 @@ void main() {
       expect(c.tiltDegrees, UpdraftCore.maxTiltDegrees);
       c.velocity = -99999;
       expect(c.tiltDegrees, -UpdraftCore.maxTiltDegrees);
+    });
+  });
+
+  group('collision matches the visible token', () {
+    // The bug: a triangular token died on a wall its silhouette never touched,
+    // because the hitbox was the bounding box. Every style now collides as the
+    // shape it draws.
+
+    /// A slab occupying the column right of [x], so the only question is when
+    /// the shape first touches its left edge.
+    Rect wallAt(double x) => Rect.fromLTRB(x, 0, x + 40, 200);
+
+    test('a level dart clears a wall a block is already inside', () {
+      const centre = Offset(100, 100);
+      final dart = updraftSilhouette(
+          token: UpdraftToken.dart, centre: centre, size: 26, tiltRadians: 0);
+      final block = updraftSilhouette(
+          token: UpdraftToken.block, centre: centre, size: 26, tiltRadians: 0);
+
+      // A slab biting into the top-right corner of the 26×26 box: the block's
+      // corner is in it, the dart's swept-back wing is not.
+      const bite = Rect.fromLTRB(108, 80, 200, 90);
+      expect(block.hitsRect(bite), isTrue);
+      expect(dart.hitsRect(bite), isFalse);
+    });
+
+    test('every style is caught by a wall it overlaps and clears one it does not',
+        () {
+      for (final token in UpdraftToken.values) {
+        final s = updraftSilhouette(
+            token: token, centre: const Offset(100, 100), size: 26, tiltRadians: 0);
+        expect(s.hitsRect(wallAt(95)), isTrue, reason: '$token');
+        expect(s.hitsRect(wallAt(140)), isFalse, reason: '$token');
+      }
+    });
+
+    test('the round styles are circles, not boxes', () {
+      for (final token in [UpdraftToken.dot, UpdraftToken.ring]) {
+        final s = updraftSilhouette(
+            token: token, centre: const Offset(100, 100), size: 26, tiltRadians: 0);
+        // The corner of the bounding box is outside a circle of radius 13…
+        expect(s.hitsRect(const Rect.fromLTWH(111, 111, 4, 4)), isFalse,
+            reason: '$token');
+        // …while the same distance straight up is inside it.
+        expect(s.hitsRect(const Rect.fromLTWH(98, 89, 4, 4)), isTrue,
+            reason: '$token');
+      }
+    });
+
+    test('an empty slab never hits — a one-sided pillar costs nothing', () {
+      final s = updraftSilhouette(
+          token: UpdraftToken.block,
+          centre: const Offset(100, 100),
+          size: 26,
+          tiltRadians: 0);
+      expect(s.hitsRect(const Rect.fromLTRB(90, 0, 130, 0)), isFalse);
+    });
+
+    test('a block never outlives the dart it circumscribes, on the same seed',
+        () {
+      int survive(UpdraftToken token) {
+        final c = core(seed: 21, token: token);
+        var steps = 0;
+        while (!c.dead && steps < 4000) {
+          if (steps % 26 == 0) c.beat();
+          c.step(dt);
+          steps++;
+        }
+        return steps;
+      }
+
+      expect(survive(UpdraftToken.dart),
+          greaterThanOrEqualTo(survive(UpdraftToken.block)));
+    });
+  });
+
+  group('obstacle placement', () {
+    Set<Pillar> spawnedOver(UpdraftCore c, double seconds) {
+      final seen = <Pillar>{};
+      advance(c, seconds, each: (_) {
+        seen.addAll(c.pillars);
+        c.y = _nearestGapCentre(c);
+        c.velocity = 0;
+      });
+      seen.addAll(c.pillars);
+      return seen;
+    }
+
+    test('all three placements occur over a seeded run', () {
+      final seen = spawnedOver(core(seed: 9), 120);
+      expect(seen.map((p) => p.placement).toSet(),
+          containsAll(PillarPlacement.values));
+    });
+
+    test('every spawned pillar leaves a passable lane', () {
+      for (final seed in [1, 2, 3, 4, 5]) {
+        final c = core(seed: seed);
+        final seen = spawnedOver(c, 90);
+        expect(seen.length, greaterThan(10), reason: 'seed $seed');
+        for (final p in seen) {
+          expect(p.gapHeight, greaterThan(c.tokenHeight),
+              reason: 'seed $seed, ${p.placement}');
+          expect(p.openTop, greaterThanOrEqualTo(0));
+          expect(p.openBottom, lessThanOrEqualTo(c.arenaHeight));
+        }
+      }
+    });
+
+    test('a one-sided pillar is open at exactly one edge', () {
+      final c = core(seed: 9);
+      final seen = spawnedOver(c, 120);
+      for (final p in seen.where((p) => p.placement != PillarPlacement.both)) {
+        final openAtCeiling = p.openTop == 0;
+        final openAtFloor = p.openBottom == c.arenaHeight;
+        expect(openAtCeiling ^ openAtFloor, isTrue, reason: '${p.placement}');
+      }
+    });
+
+    test('the placement sequence is the same for the same seed', () {
+      List<PillarPlacement> run() =>
+          spawnedOver(core(seed: 31), 60).map((p) => p.placement).toList();
+      expect(run(), run());
     });
   });
 }

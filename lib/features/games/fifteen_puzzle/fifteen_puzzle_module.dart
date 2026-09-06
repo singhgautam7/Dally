@@ -69,7 +69,7 @@ class FifteenPuzzleModule extends GameModule {
   @override
   String? statSummary(GameAggregate agg) {
     final m = agg.metric('moves').best(higherIsBetter: false);
-    return m == null ? null : '\${m.round()} moves';
+    return m == null ? null : '${m.round()} moves';
   }
   @override
   Widget buildSetupScreen(BuildContext context, WidgetRef ref) =>
