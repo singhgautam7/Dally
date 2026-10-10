@@ -1,6 +1,7 @@
 import 'package:dally/core/app_providers.dart';
 import 'package:dally/core/game/game_registry.dart';
 import 'package:dally/core/storage/key_value_store.dart';
+import 'package:dally/core/storage/settings.dart';
 import 'package:dally/core/theme/theme_controller.dart';
 import 'package:dally/core/widgets/style_picker_sheet.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -124,7 +125,7 @@ void main() {
     final container = await containerWith({'settings': 'not json'});
     addTearDown(container.dispose);
     expect(container.read(settingsControllerProvider).styleChoices, isEmpty);
-    expect(container.read(settingsControllerProvider).paletteId, 'ink');
+    expect(container.read(settingsControllerProvider).paletteId, Settings.defaults.paletteId);
   });
 
   test('a settings blob from a newer build is discarded, not guessed at', () async {
@@ -132,6 +133,6 @@ void main() {
       'settings': '{"schemaVersion":99,"paletteId":"future"}',
     });
     addTearDown(container.dispose);
-    expect(container.read(settingsControllerProvider).paletteId, 'ink');
+    expect(container.read(settingsControllerProvider).paletteId, Settings.defaults.paletteId);
   });
 }

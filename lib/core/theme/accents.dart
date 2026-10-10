@@ -69,8 +69,8 @@ const List<DallyAccent> kDallyAccents = [
   DallyAccent(id: 'neon', name: 'Neon', light: Color(0xFF0F7A2E), dark: Color(0xFF4DFF8F)),
 ];
 
-/// The default accent — Ink's, and the first-launch default.
-const String kDefaultAccentId = 'azure';
+/// The first-launch accent: Blush, the app icon's pink (the Blush preset's).
+const String kDefaultAccentId = 'blush';
 
 DallyAccent accentById(String? id) {
   for (final a in kDallyAccents) {

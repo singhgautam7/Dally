@@ -31,7 +31,7 @@ set, so we pinned the newest lines that resolved on 3.11:
 | build_runner / json_serializable | caret ranges | — | analyzer constraints must co-resolve with freezed |
 
 Exact pins that are already current: go_router 17.5.0, shared_preferences 2.5.5,
-flutter_svg 2.3.0, dartchess 0.13.1, flutter_launcher_icons 0.14.4.
+flutter_svg 2.3.0, dartchess 0.13.1.
 
 ## To move to latest later
 
