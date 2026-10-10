@@ -15,19 +15,22 @@ enum DpadPosition { left, centre, right }
 @freezed
 abstract class Settings with _$Settings {
   const factory Settings({
-    @Default(2) int schemaVersion,
+    @Default(3) int schemaVersion,
 
     /// **Legacy.** One stored `themeId` became the three theme keys below in
     /// v4. Still written for one release so a downgrade is survivable, and
     /// still the migration source on first launch after the update — but never
     /// read to build a palette.
-    @Default('ink') String paletteId,
+    @Default('blush') String paletteId,
 
     /// Theme axis 1 — `'light'` or `'dark'`.
-    @Default('dark') String themeMode,
+    @Default('light') String themeMode,
 
     /// Theme axis 2 — one of the ten accent identities.
-    @Default('azure') String accentId,
+    ///
+    /// The three theme defaults are the Blush preset, the one closest to the
+    /// app icon's pink; `settings_migrations.dart` keeps older blobs on theirs.
+    @Default('blush') String accentId,
 
     /// Theme axis 3 — true black background. Dark only; ignored in Light.
     @Default(false) bool amoled,

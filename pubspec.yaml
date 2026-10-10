@@ -46,8 +46,7 @@ dev_dependencies:
   freezed: ^3.0.0
   json_serializable: ^6.8.0
 
-  # Adaptive icon + splash generation
-  flutter_launcher_icons: 0.14.4
+  # Splash generation
   flutter_native_splash: ^2.4.0
 
 flutter:
@@ -78,12 +77,30 @@ flutter:
         - asset: assets/fonts/JetBrainsMono-700.ttf
           weight: 700
 
-# Adaptive launcher icon generation (run: dart run flutter_launcher_icons).
-# Colours are fixed per the design and never follow the in-app theme.
-flutter_launcher_icons:
+# The launcher icon is the icon family's own vector drawable, converted from
+# `specs/design/app-icon/` into `android/app/src/main/res/`: an adaptive icon with
+# a monochrome layer for Android 13's themed icons. `flutter_launcher_icons` is
+# deliberately not used, because it would replace that vector with rasterised
+# PNGs. The legacy PNGs for Android before adaptive icons and the splash art
+# below are rendered from the same SVGs.
+
+flutter_native_splash:
+  # The pale ground of the icon itself, so the splash reads as the launcher
+  # icon holding still rather than as a different screen.
+  color: "#FEDEEB"
+  color_dark: "#27141C"
+  image: assets/icon/splash.png
+  image_dark: assets/icon/splash_dark.png
+  android_12:
+    # Android 12 masks its splash icon to a circle and shows only the middle of
+    # it, so this art is the glyph alone on transparent and the ground is the
+    # colour below. Passing the whole icon here gets it cropped.
+    image: assets/icon/splash_android12.png
+    image_dark: assets/icon/splash_android12_dark.png
+    icon_background_color: "#FEDEEB"
+    icon_background_color_dark: "#27141C"
+    color: "#FEDEEB"
+    color_dark: "#27141C"
   android: true
-  ios: true
-  image_path: "assets/icon/icon_full.png"
-  adaptive_icon_background: "#0E0F12"
-  adaptive_icon_foreground: "assets/icon/icon_foreground.png"
-  remove_alpha_ios: true
+  ios: false
+  web: false

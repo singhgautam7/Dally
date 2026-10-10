@@ -21,6 +21,9 @@ mixin _$Settings {
 /// read to build a palette.
  String get paletteId;/// Theme axis 1 — `'light'` or `'dark'`.
  String get themeMode;/// Theme axis 2 — one of the ten accent identities.
+///
+/// The three theme defaults are the Blush preset, the one closest to the
+/// app icon's pink; `settings_migrations.dart` keeps older blobs on theirs.
  String get accentId;/// Theme axis 3 — true black background. Dark only; ignored in Light.
  bool get amoled;/// Accessibility: promotes the two quiet text weights a step.
  bool get highContrastText; bool get hapticsEnabled; bool get soundEnabled; OnScreenControls get onScreenControls; DpadPosition get dpadPosition; int get longPressMs;/// Ludo's die sits in the corner of whoever is in turn and is tapped to
@@ -235,7 +238,7 @@ return $default(_that.schemaVersion,_that.paletteId,_that.themeMode,_that.accent
 @JsonSerializable()
 
 class _Settings implements Settings {
-  const _Settings({this.schemaVersion = 2, this.paletteId = 'ink', this.themeMode = 'dark', this.accentId = 'azure', this.amoled = false, this.highContrastText = false, this.hapticsEnabled = true, this.soundEnabled = false, this.onScreenControls = OnScreenControls.dpad, this.dpadPosition = DpadPosition.centre, this.longPressMs = 400, this.ludoDieFollowsTurn = true, this.reduceMotion = false, final  Map<String, String> styleChoices = const <String, String>{}}): _styleChoices = styleChoices;
+  const _Settings({this.schemaVersion = 3, this.paletteId = 'blush', this.themeMode = 'light', this.accentId = 'blush', this.amoled = false, this.highContrastText = false, this.hapticsEnabled = true, this.soundEnabled = false, this.onScreenControls = OnScreenControls.dpad, this.dpadPosition = DpadPosition.centre, this.longPressMs = 400, this.ludoDieFollowsTurn = true, this.reduceMotion = false, final  Map<String, String> styleChoices = const <String, String>{}}): _styleChoices = styleChoices;
   factory _Settings.fromJson(Map<String, dynamic> json) => _$SettingsFromJson(json);
 
 @override@JsonKey() final  int schemaVersion;
@@ -247,6 +250,9 @@ class _Settings implements Settings {
 /// Theme axis 1 — `'light'` or `'dark'`.
 @override@JsonKey() final  String themeMode;
 /// Theme axis 2 — one of the ten accent identities.
+///
+/// The three theme defaults are the Blush preset, the one closest to the
+/// app icon's pink; `settings_migrations.dart` keeps older blobs on theirs.
 @override@JsonKey() final  String accentId;
 /// Theme axis 3 — true black background. Dark only; ignored in Light.
 @override@JsonKey() final  bool amoled;

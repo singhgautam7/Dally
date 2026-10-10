@@ -7,10 +7,10 @@ part of 'settings.dart';
 // **************************************************************************
 
 _Settings _$SettingsFromJson(Map<String, dynamic> json) => _Settings(
-  schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 2,
-  paletteId: json['paletteId'] as String? ?? 'ink',
-  themeMode: json['themeMode'] as String? ?? 'dark',
-  accentId: json['accentId'] as String? ?? 'azure',
+  schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 3,
+  paletteId: json['paletteId'] as String? ?? 'blush',
+  themeMode: json['themeMode'] as String? ?? 'light',
+  accentId: json['accentId'] as String? ?? 'blush',
   amoled: json['amoled'] as bool? ?? false,
   highContrastText: json['highContrastText'] as bool? ?? false,
   hapticsEnabled: json['hapticsEnabled'] as bool? ?? true,

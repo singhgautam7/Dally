@@ -17,11 +17,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// Two screens, not one scroll: presets with a way in to the builder, and the
 /// builder on its own route (`Dally Theme System.dc.html` §21g).
+const Map<String, Object> inkPrefs = {
+  'settings': '{"schemaVersion":3,"paletteId":"ink","themeMode":"dark",'
+      '"accentId":"azure","amoled":false}',
+};
+
 void main() {
   /// Pumps the Theme screen with a real router under it, so the push into
   /// Custom can be *taken* rather than simulated.
+  ///
+  /// Starts on Ink unless told otherwise: these cases were written from Ink,
+  /// and the first-launch default (Blush) has its own test below.
   Future<ProviderContainer> pumpTheme(WidgetTester tester,
-      {Map<String, Object> prefs = const {}}) async {
+      {Map<String, Object> prefs = inkPrefs}) async {
     SharedPreferences.setMockInitialValues(prefs);
     final store = await KeyValueStore.open();
     final container =
@@ -81,12 +89,12 @@ void main() {
   }
 
   group('the presets screen', () {
-    testWidgets('opens on the shipped default, Ink', (tester) async {
-      final container = await pumpTheme(tester);
+    testWidgets('opens on the shipped default, Blush', (tester) async {
+      final container = await pumpTheme(tester, prefs: const {});
       final triple = container.read(themeTripleProvider);
-      expect(triple.preset?.id, 'ink');
-      expect(triple.mode, DallyMode.dark);
-      expect(triple.accentId, 'azure');
+      expect(triple.preset?.id, 'blush');
+      expect(triple.mode, DallyMode.light);
+      expect(triple.accentId, 'blush');
       expect(triple.amoled, isFalse);
       expect(find.text('CURRENT'), findsOneWidget);
     });
